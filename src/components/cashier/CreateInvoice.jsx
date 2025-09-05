@@ -16,6 +16,8 @@ const CreateInvoice = () => {
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [taxRate, setTaxRate] = useState(0);
   const [invoiceStatus, setInvoiceStatus] = useState('unpaid');
+  const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percentage'
+  const [discountValue, setDiscountValue] = useState(0);
 
   useEffect(() => {
     const loadedProducts = JSON.parse(localStorage.getItem('products') || '[]');
@@ -32,7 +34,7 @@ const CreateInvoice = () => {
       updatedProducts[existingIndex].quantity += 1;
       setSelectedProducts(updatedProducts);
     } else {
-      setSelectedProducts([...selectedProducts, { ...product, quantity: 1, amount: 0 }]);
+      setSelectedProducts([...selectedProducts, { ...product, quantity: 1, amount: product.price || 0 }]);
     }
   };
 
@@ -63,12 +65,21 @@ const CreateInvoice = () => {
     return selectedProducts.reduce((sum, product) => sum + (product.quantity * product.amount), 0);
   };
 
+  const calculateDiscount = () => {
+    const subtotal = calculateSubtotal();
+    if (discountType === 'percentage') {
+      return (subtotal * discountValue) / 100;
+    }
+    return discountValue;
+  };
+
   const calculateTax = () => {
-    return (calculateSubtotal() * taxRate) / 100;
+    const subtotalAfterDiscount = calculateSubtotal() - calculateDiscount();
+    return (subtotalAfterDiscount * taxRate) / 100;
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax();
+    return calculateSubtotal() - calculateDiscount() + calculateTax();
   };
 
   const generateInvoiceNumber = () => {
@@ -100,6 +111,9 @@ const CreateInvoice = () => {
       customerName: selectedCustomer ? customers.find(c => c.phone === selectedCustomer)?.name : null,
       items: selectedProducts,
       subTotal: calculateSubtotal().toFixed(2),
+      discountType: discountType,
+      discountValue: discountValue,
+      discountAmount: calculateDiscount().toFixed(2),
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
@@ -129,6 +143,8 @@ const CreateInvoice = () => {
     setSelectedProducts([]);
     setSelectedCustomer('');
     setTaxRate(0);
+    setDiscountType('amount');
+    setDiscountValue(0);
     setInvoiceStatus('unpaid');
     setProducts(updatedProducts);
   };
@@ -170,6 +186,7 @@ const CreateInvoice = () => {
         <hr>
         <div style="text-align: right; margin-top: 20px;">
           <p><strong>Subtotal: ${formatCurrency(calculateSubtotal())}</strong></p>
+          ${calculateDiscount() > 0 ? `<p><strong>Discount: -${formatCurrency(calculateDiscount())}</strong></p>` : ''}
           ${taxRate > 0 ? `<p><strong>Tax (${taxRate}%): ${formatCurrency(calculateTax())}</strong></p>` : ''}
           <p style="font-size: 18px;"><strong>Total: ${formatCurrency(calculateTotal())}</strong></p>
         </div>
@@ -310,8 +327,49 @@ const CreateInvoice = () => {
                   </div>
                 </div>
                 
+                <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="discountType">Discount Type</Label>
+                    <Select value={discountType} onValueChange={setDiscountType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select discount type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="amount">Amount</SelectItem>
+                        <SelectItem value="percentage">Percentage</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="discountValue">
+                      Discount {discountType === 'percentage' ? '(%)' : `(${formatCurrency(0).replace(/[\d.,]/g, '')})`}
+                    </Label>
+                    <Input
+                      id="discountValue"
+                      type="number"
+                      placeholder={`Enter ${discountType === 'percentage' ? 'percentage' : 'amount'}`}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                      min="0"
+                      max={discountType === 'percentage' ? "100" : undefined}
+                      step={discountType === 'percentage' ? "0.1" : "0.01"}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Discount Amount</Label>
+                    <div className="p-3 bg-muted rounded-md">
+                      <span className="font-semibold">{formatCurrency(calculateDiscount())}</span>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="text-right space-y-2">
                   <p className="text-lg">Subtotal: <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span></p>
+                  {calculateDiscount() > 0 && (
+                    <p className="text-lg text-green-600">Discount: <span className="font-semibold">-{formatCurrency(calculateDiscount())}</span></p>
+                  )}
                   {taxRate > 0 && (
                     <p className="text-lg">Tax ({taxRate}%): <span className="font-semibold">{formatCurrency(calculateTax())}</span></p>
                   )}

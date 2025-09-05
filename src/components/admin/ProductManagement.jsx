@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Package, Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/utils/formatCurrency";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -15,7 +16,8 @@ const ProductManagement = () => {
     name: '',
     barcode: '',
     sku: '',
-    quantity: ''
+    quantity: '',
+    price: ''
   });
 
   useEffect(() => {
@@ -41,6 +43,7 @@ const ProductManagement = () => {
       barcode: formData.barcode.trim() || '',
       sku: formData.sku.trim() || '',
       quantity: parseInt(formData.quantity) || 0,
+      price: parseFloat(formData.price) || 0,
     };
 
     if (editingProduct) {
@@ -68,7 +71,8 @@ const ProductManagement = () => {
       name: product?.name || '',
       barcode: product?.barcode || '',
       sku: product?.sku || '',
-      quantity: product?.quantity?.toString() || ''
+      quantity: product?.quantity?.toString() || '',
+      price: product?.price?.toString() || ''
     });
     setIsDialogOpen(true);
   };
@@ -76,7 +80,7 @@ const ProductManagement = () => {
   const closeDialog = () => {
     setIsDialogOpen(false);
     setEditingProduct(null);
-    setFormData({ name: '', barcode: '', sku: '', quantity: '' });
+    setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '' });
   };
 
   const deleteProduct = (productId) => {
@@ -114,10 +118,11 @@ const ProductManagement = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <h3 className="font-semibold text-lg">{product.name}</h3>
-                        <div className="grid md:grid-cols-3 gap-2 mt-2 text-sm text-muted-foreground">
+                        <div className="grid md:grid-cols-4 gap-2 mt-2 text-sm text-muted-foreground">
                           {product.barcode && <p>Barcode: {product.barcode}</p>}
                           {product.sku && <p>SKU: {product.sku}</p>}
                           <p>Quantity: {product.quantity}</p>
+                          <p>Price: {formatCurrency(product.price || 0)}</p>
                         </div>
                       </div>
                       
@@ -199,6 +204,19 @@ const ProductManagement = () => {
                   value={formData.quantity}
                   onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                   min="0"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="price">Price</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  placeholder="Enter price"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  min="0"
+                  step="0.01"
                 />
               </div>
             </div>

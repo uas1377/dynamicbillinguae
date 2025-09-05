@@ -136,11 +136,14 @@ const CustomerPanel = () => {
                           </div>
                         </div>
                         
-                        <div className="space-y-2">
-                          <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subTotal)}</p>
-                          {invoice.tax > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.taxAmount)}</p>}
-                        </div>
+                         <div className="space-y-2">
+                           <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
+                           <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subTotal)}</p>
+                           {parseFloat(invoice.discountAmount || 0) > 0 && (
+                             <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discountAmount)}</p>
+                           )}
+                           {parseFloat(invoice.taxAmount || 0) > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.taxAmount)}</p>}
+                         </div>
                       </div>
 
                       {invoice.items.length > 0 && (

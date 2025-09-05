@@ -1,0 +1,51 @@
+{
+  "name": "Galaxy Invoice - Billing Management System",
+  "short_name": "Galaxy Invoice",
+  "description": "Complete billing and invoice management system with multi-role access",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Cashier Login",
+      "short_name": "Cashier",
+      "description": "Access cashier panel",
+      "url": "/?role=cashier",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Customer Portal",
+      "short_name": "Customer",
+      "description": "Access customer portal",
+      "url": "/?role=customer",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

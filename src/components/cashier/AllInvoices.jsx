@@ -202,6 +202,9 @@ const AllInvoices = () => {
                       <div className="space-y-1">
                         <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
                         <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subTotal)}</p>
+                        {parseFloat(invoice.discountAmount || 0) > 0 && (
+                          <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discountAmount)}</p>
+                        )}
                         {parseFloat(invoice.taxAmount) > 0 && (
                           <p><span className="font-medium">Tax ({invoice.taxRate}%):</span> {formatCurrency(invoice.taxAmount)}</p>
                         )}

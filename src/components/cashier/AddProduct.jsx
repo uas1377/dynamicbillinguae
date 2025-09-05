@@ -11,7 +11,8 @@ const AddProduct = () => {
     name: '',
     barcode: '',
     sku: '',
-    quantity: ''
+    quantity: '',
+    price: ''
   });
 
   const handleSubmit = (e) => {
@@ -29,6 +30,7 @@ const AddProduct = () => {
       barcode: product.barcode.trim() || '',
       sku: product.sku.trim() || '',
       quantity: parseInt(product.quantity) || 0,
+      price: parseFloat(product.price) || 0,
       createdAt: new Date().toISOString()
     };
 
@@ -36,7 +38,7 @@ const AddProduct = () => {
     localStorage.setItem('products', JSON.stringify(products));
     
     toast.success('Product added successfully');
-    setProduct({ name: '', barcode: '', sku: '', quantity: '' });
+    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '' });
   };
 
   return (
@@ -90,6 +92,19 @@ const AddProduct = () => {
                 value={product.quantity}
                 onChange={(e) => setProduct({ ...product, quantity: e.target.value })}
                 min="0"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="price">Price</Label>
+              <Input
+                id="price"
+                type="number"
+                placeholder="Enter price (optional)"
+                value={product.price}
+                onChange={(e) => setProduct({ ...product, price: e.target.value })}
+                min="0"
+                step="0.01"
               />
             </div>
           </div>
