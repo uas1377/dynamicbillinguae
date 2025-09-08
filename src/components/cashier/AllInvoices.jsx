@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { FileText, Filter, Search } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
@@ -29,14 +30,40 @@ const AllInvoices = () => {
     applyFilters();
   }, [invoices, filters]);
 
-  const loadInvoices = () => {
-    const loadedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    setInvoices(loadedInvoices);
+  const loadInvoices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        toast.error('Failed to load invoices: ' + error.message);
+        return;
+      }
+
+      setInvoices(data || []);
+    } catch (error) {
+      toast.error('Failed to load invoices: ' + error.message);
+    }
   };
 
-  const loadCustomers = () => {
-    const loadedCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
-    setCustomers(loadedCustomers);
+  const loadCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        toast.error('Failed to load customers: ' + error.message);
+        return;
+      }
+
+      setCustomers(data || []);
+    } catch (error) {
+      toast.error('Failed to load customers: ' + error.message);
+    }
   };
 
   const applyFilters = () => {
@@ -49,31 +76,45 @@ const AllInvoices = () => {
 
     // Filter by customer
     if (filters.customer !== 'all') {
-      filtered = filtered.filter(invoice => invoice.customerPhone === filters.customer);
+      filtered = filtered.filter(invoice => invoice.customer_phone === filters.customer);
     }
 
     // Filter by search
     if (filters.search) {
       const search = filters.search.toLowerCase();
       filtered = filtered.filter(invoice =>
-        invoice.invoiceNumber.toLowerCase().includes(search) ||
-        (invoice.customerName && invoice.customerName.toLowerCase().includes(search)) ||
-        (invoice.customerPhone && invoice.customerPhone.includes(search))
+        invoice.invoice_number.toLowerCase().includes(search) ||
+        (invoice.customer_name && invoice.customer_name.toLowerCase().includes(search)) ||
+        (invoice.customer_phone && invoice.customer_phone.includes(search))
       );
     }
 
     setFilteredInvoices(filtered);
   };
 
-  const toggleInvoiceStatus = (invoiceId, currentStatus) => {
+  const toggleInvoiceStatus = async (invoiceId, currentStatus) => {
     const newStatus = currentStatus === 'paid' ? 'unpaid' : 'paid';
-    const updatedInvoices = invoices.map(invoice =>
-      invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
-    );
     
-    setInvoices(updatedInvoices);
-    localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
-    toast.success(`Invoice status updated to ${newStatus}`);
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: newStatus })
+        .eq('id', invoiceId);
+
+      if (error) {
+        toast.error('Failed to update invoice status: ' + error.message);
+        return;
+      }
+
+      const updatedInvoices = invoices.map(invoice =>
+        invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
+      );
+      
+      setInvoices(updatedInvoices);
+      toast.success(`Invoice status updated to ${newStatus}`);
+    } catch (error) {
+      toast.error('Failed to update invoice status: ' + error.message);
+    }
   };
 
   return (
@@ -145,7 +186,7 @@ const AllInvoices = () => {
               All Invoices ({filteredInvoices.length})
             </div>
             <div className="text-sm text-muted-foreground">
-              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grandTotal), 0))}
+              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total), 0))}
             </div>
           </CardTitle>
         </CardHeader>
@@ -165,7 +206,7 @@ const AllInvoices = () => {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-lg">#{invoice.invoiceNumber}</h3>
+                        <h3 className="font-semibold text-lg">#{invoice.invoice_number}</h3>
                         <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
                           {invoice.status.toUpperCase()}
                         </Badge>
@@ -183,7 +224,7 @@ const AllInvoices = () => {
                           />
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grandTotal)}</p>
+                          <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total)}</p>
                         </div>
                       </div>
                     </div>
@@ -191,22 +232,22 @@ const AllInvoices = () => {
                     <div className="grid md:grid-cols-2 gap-4 text-sm">
                       <div className="space-y-1">
                         <p><span className="font-medium">Date:</span> {new Date(invoice.date).toLocaleDateString()}</p>
-                        {invoice.customerName && (
-                          <p><span className="font-medium">Customer:</span> {invoice.customerName}</p>
+                        {invoice.customer_name && (
+                          <p><span className="font-medium">Customer:</span> {invoice.customer_name}</p>
                         )}
-                        {invoice.customerPhone && (
-                          <p><span className="font-medium">Phone:</span> {invoice.customerPhone}</p>
+                        {invoice.customer_phone && (
+                          <p><span className="font-medium">Phone:</span> {invoice.customer_phone}</p>
                         )}
                       </div>
                       
                       <div className="space-y-1">
                         <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                        <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subTotal)}</p>
-                        {parseFloat(invoice.discountAmount || 0) > 0 && (
-                          <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discountAmount)}</p>
+                        <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
+                        {parseFloat(invoice.discount_amount || 0) > 0 && (
+                          <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
                         )}
-                        {parseFloat(invoice.taxAmount) > 0 && (
-                          <p><span className="font-medium">Tax ({invoice.taxRate}%):</span> {formatCurrency(invoice.taxAmount)}</p>
+                        {parseFloat(invoice.tax_amount) > 0 && (
+                          <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount)}</p>
                         )}
                       </div>
                     </div>

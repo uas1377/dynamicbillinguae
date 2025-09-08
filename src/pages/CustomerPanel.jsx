@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { LogOut, FileText, Calendar, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { supabase } from "@/integrations/supabase/client";
 
 const CustomerPanel = () => {
   const navigate = useNavigate();
@@ -18,12 +19,27 @@ const CustomerPanel = () => {
       return;
     }
     setCurrentUser(user);
-
-    // Load customer's invoices
-    const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    const myInvoices = allInvoices.filter(invoice => invoice.customerPhone === user.phone);
-    setCustomerInvoices(myInvoices);
+    loadCustomerInvoices(user.phone);
   }, [navigate]);
+
+  const loadCustomerInvoices = async (customerPhone) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('customer_phone', customerPhone)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to load customer invoices:', error.message);
+        return;
+      }
+
+      setCustomerInvoices(data || []);
+    } catch (error) {
+      console.error('Failed to load customer invoices:', error.message);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
@@ -32,8 +48,8 @@ const CustomerPanel = () => {
 
   if (!currentUser) return null;
 
-  const totalAmount = customerInvoices.reduce((sum, invoice) => sum + parseFloat(invoice.grandTotal), 0);
-  const paidAmount = customerInvoices.filter(inv => inv.status === 'paid').reduce((sum, invoice) => sum + parseFloat(invoice.grandTotal), 0);
+  const totalAmount = customerInvoices.reduce((sum, invoice) => sum + parseFloat(invoice.grand_total), 0);
+  const paidAmount = customerInvoices.filter(inv => inv.status === 'paid').reduce((sum, invoice) => sum + parseFloat(invoice.grand_total), 0);
   const unpaidAmount = totalAmount - paidAmount;
 
   return (
@@ -118,7 +134,7 @@ const CustomerPanel = () => {
                   <Card key={invoice.id} className="border shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-lg">Invoice #{invoice.invoiceNumber}</h3>
+                        <h3 className="font-semibold text-lg">Invoice #{invoice.invoice_number}</h3>
                         <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
                           {invoice.status.toUpperCase()}
                         </Badge>
@@ -132,17 +148,17 @@ const CustomerPanel = () => {
                           </div>
                           <div className="flex items-center gap-2">
                             <DollarSign className="w-4 h-4" />
-                            <span className="font-semibold">{formatCurrency(invoice.grandTotal)}</span>
+                            <span className="font-semibold">{formatCurrency(invoice.grand_total)}</span>
                           </div>
                         </div>
                         
                          <div className="space-y-2">
                            <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                           <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subTotal)}</p>
-                           {parseFloat(invoice.discountAmount || 0) > 0 && (
-                             <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discountAmount)}</p>
-                           )}
-                           {parseFloat(invoice.taxAmount || 0) > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.taxAmount)}</p>}
+                            <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
+                            {parseFloat(invoice.discount_amount || 0) > 0 && (
+                              <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
+                            )}
+                            {parseFloat(invoice.tax_amount || 0) > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.tax_amount)}</p>}
                          </div>
                       </div>
 

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Package, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const AddProduct = () => {
   const [product, setProduct] = useState({
@@ -15,7 +16,7 @@ const AddProduct = () => {
     price: ''
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!product.name.trim()) {
@@ -23,22 +24,27 @@ const AddProduct = () => {
       return;
     }
 
-    const products = JSON.parse(localStorage.getItem('products') || '[]');
-    const newProduct = {
-      id: Date.now().toString(),
-      name: product.name.trim(),
-      barcode: product.barcode.trim() || '',
-      sku: product.sku.trim() || '',
-      quantity: parseInt(product.quantity) || 0,
-      price: parseFloat(product.price) || 0,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const { error } = await supabase
+        .from('products')
+        .insert({
+          name: product.name.trim(),
+          barcode: product.barcode.trim() || null,
+          sku: product.sku.trim() || null,
+          quantity: parseInt(product.quantity) || 0,
+          price: parseFloat(product.price) || 0
+        });
 
-    products.push(newProduct);
-    localStorage.setItem('products', JSON.stringify(products));
-    
-    toast.success('Product added successfully');
-    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '' });
+      if (error) {
+        toast.error('Failed to add product: ' + error.message);
+        return;
+      }
+
+      toast.success('Product added successfully');
+      setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '' });
+    } catch (error) {
+      toast.error('Failed to add product: ' + error.message);
+    }
   };
 
   return (

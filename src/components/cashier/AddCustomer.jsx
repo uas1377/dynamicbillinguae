@@ -6,15 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const AddCustomer = () => {
   const [customer, setCustomer] = useState({
     name: '',
     phone: '',
-    type: ''
+    email: '',
+    address: ''
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!customer.name.trim()) {
@@ -26,34 +28,63 @@ const AddCustomer = () => {
       toast.error('Phone number is required');
       return;
     }
-    
-    if (!customer.type) {
-      toast.error('Customer type is required');
-      return;
+
+    try {
+      // Check if phone number already exists
+      const { data: existingCustomer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('phone', customer.phone.trim())
+        .single();
+
+      if (existingCustomer) {
+        toast.error('Customer with this phone number already exists');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('customers')
+        .insert({
+          name: customer.name.trim(),
+          phone: customer.phone.trim(),
+          email: customer.email.trim() || null,
+          address: customer.address.trim() || null
+        });
+
+      if (error) {
+        toast.error('Failed to add customer: ' + error.message);
+        return;
+      }
+      
+      toast.success('Customer added successfully');
+      setCustomer({ name: '', phone: '', email: '', address: '' });
+    } catch (error) {
+      // If no existing customer found, that's fine, continue with creation
+      if (error.code === 'PGRST116') {
+        try {
+          const { error: insertError } = await supabase
+            .from('customers')
+            .insert({
+              name: customer.name.trim(),
+              phone: customer.phone.trim(),
+              email: customer.email.trim() || null,
+              address: customer.address.trim() || null
+            });
+
+          if (insertError) {
+            toast.error('Failed to add customer: ' + insertError.message);
+            return;
+          }
+          
+          toast.success('Customer added successfully');
+          setCustomer({ name: '', phone: '', email: '', address: '' });
+        } catch (insertErr) {
+          toast.error('Failed to add customer: ' + insertErr.message);
+        }
+      } else {
+        toast.error('Failed to add customer: ' + error.message);
+      }
     }
-
-    const customers = JSON.parse(localStorage.getItem('customers') || '[]');
-    
-    // Check if phone number already exists
-    const existingCustomer = customers.find(c => c.phone === customer.phone.trim());
-    if (existingCustomer) {
-      toast.error('Customer with this phone number already exists');
-      return;
-    }
-
-    const newCustomer = {
-      id: Date.now().toString(),
-      name: customer.name.trim(),
-      phone: customer.phone.trim(),
-      type: customer.type,
-      createdAt: new Date().toISOString()
-    };
-
-    customers.push(newCustomer);
-    localStorage.setItem('customers', JSON.stringify(customers));
-    
-    toast.success('Customer added successfully');
-    setCustomer({ name: '', phone: '', type: '' });
   };
 
   return (
@@ -88,19 +119,25 @@ const AddCustomer = () => {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email (Optional)</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter email address"
+                value={customer.email}
+                onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+              />
+            </div>
             
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="type">Customer Type *</Label>
-              <Select value={customer.type} onValueChange={(value) => setCustomer({ ...customer, type: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="dealer">Dealer</SelectItem>
-                  <SelectItem value="reseller">Reseller</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="address">Address (Optional)</Label>
+              <Input
+                id="address"
+                placeholder="Enter customer address"
+                value={customer.address}
+                onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
+              />
             </div>
           </div>
           

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Package, Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { supabase } from "@/integrations/supabase/client";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -24,12 +25,25 @@ const ProductManagement = () => {
     loadProducts();
   }, []);
 
-  const loadProducts = () => {
-    const loadedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    setProducts(loadedProducts);
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        toast.error('Failed to load products: ' + error.message);
+        return;
+      }
+
+      setProducts(data || []);
+    } catch (error) {
+      toast.error('Failed to load products: ' + error.message);
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -37,32 +51,43 @@ const ProductManagement = () => {
       return;
     }
 
-    const updatedProducts = [...products];
     const productData = {
       name: formData.name.trim(),
-      barcode: formData.barcode.trim() || '',
-      sku: formData.sku.trim() || '',
+      barcode: formData.barcode.trim() || null,
+      sku: formData.sku.trim() || null,
       quantity: parseInt(formData.quantity) || 0,
       price: parseFloat(formData.price) || 0,
     };
 
-    if (editingProduct) {
-      const index = updatedProducts.findIndex(p => p.id === editingProduct.id);
-      updatedProducts[index] = { ...editingProduct, ...productData };
-      toast.success('Product updated successfully');
-    } else {
-      const newProduct = {
-        id: Date.now().toString(),
-        ...productData,
-        createdAt: new Date().toISOString()
-      };
-      updatedProducts.push(newProduct);
-      toast.success('Product added successfully');
-    }
+    try {
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', editingProduct.id);
 
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
-    setProducts(updatedProducts);
-    closeDialog();
+        if (error) {
+          toast.error('Failed to update product: ' + error.message);
+          return;
+        }
+        toast.success('Product updated successfully');
+      } else {
+        const { error } = await supabase
+          .from('products')
+          .insert(productData);
+
+        if (error) {
+          toast.error('Failed to add product: ' + error.message);
+          return;
+        }
+        toast.success('Product added successfully');
+      }
+
+      await loadProducts();
+      closeDialog();
+    } catch (error) {
+      toast.error('Failed to save product: ' + error.message);
+    }
   };
 
   const openDialog = (product = null) => {
@@ -83,11 +108,23 @@ const ProductManagement = () => {
     setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '' });
   };
 
-  const deleteProduct = (productId) => {
-    const updatedProducts = products.filter(p => p.id !== productId);
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
-    setProducts(updatedProducts);
-    toast.success('Product deleted successfully');
+  const deleteProduct = async (productId) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) {
+        toast.error('Failed to delete product: ' + error.message);
+        return;
+      }
+
+      toast.success('Product deleted successfully');
+      await loadProducts();
+    } catch (error) {
+      toast.error('Failed to delete product: ' + error.message);
+    }
   };
 
   return (

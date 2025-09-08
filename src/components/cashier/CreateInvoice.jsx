@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Minus, ShoppingCart, FileText, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { supabase } from "@/integrations/supabase/client";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
@@ -20,11 +21,31 @@ const CreateInvoice = () => {
   const [discountValue, setDiscountValue] = useState(0);
 
   useEffect(() => {
-    const loadedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    const loadedCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
-    setProducts(loadedProducts);
-    setCustomers(loadedCustomers);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      const [productsRes, customersRes] = await Promise.all([
+        supabase.from('products').select('*').order('created_at', { ascending: false }),
+        supabase.from('customers').select('*').order('created_at', { ascending: false })
+      ]);
+
+      if (productsRes.error) {
+        toast.error('Failed to load products: ' + productsRes.error.message);
+      } else {
+        setProducts(productsRes.data || []);
+      }
+
+      if (customersRes.error) {
+        toast.error('Failed to load customers: ' + customersRes.error.message);
+      } else {
+        setCustomers(customersRes.data || []);
+      }
+    } catch (error) {
+      toast.error('Failed to load data: ' + error.message);
+    }
+  };
 
   const addProductToInvoice = (product) => {
     const existingIndex = selectedProducts.findIndex(p => p.id === product.id);
@@ -82,14 +103,24 @@ const CreateInvoice = () => {
     return calculateSubtotal() - calculateDiscount() + calculateTax();
   };
 
-  const generateInvoiceNumber = () => {
-    const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    const lastNumber = invoices.length > 0 ? 
-      Math.max(...invoices.map(inv => parseInt(inv.invoiceNumber.replace('glxy', '')))) : 0;
-    return `glxy${String(lastNumber + 1).padStart(4, '0')}`;
+  const generateInvoiceNumber = async () => {
+    try {
+      const { data } = await supabase
+        .from('invoices')
+        .select('invoice_number')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const lastNumber = data && data.length > 0 ? 
+        parseInt(data[0].invoice_number.replace('glxy', '')) : 0;
+      return `glxy${String(lastNumber + 1).padStart(4, '0')}`;
+    } catch (error) {
+      const timestamp = Date.now();
+      return `glxy${String(timestamp).slice(-4)}`;
+    }
   };
 
-  const saveInvoice = () => {
+  const saveInvoice = async () => {
     if (selectedProducts.length === 0) {
       toast.error('Please add at least one product to the invoice');
       return;
@@ -102,51 +133,63 @@ const CreateInvoice = () => {
       return;
     }
 
-    const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    const newInvoice = {
-      id: Date.now().toString(),
-      invoiceNumber: generateInvoiceNumber(),
-      date: new Date().toISOString(),
-      customerPhone: selectedCustomer || null,
-      customerName: selectedCustomer ? customers.find(c => c.phone === selectedCustomer)?.name : null,
-      items: selectedProducts,
-      subTotal: calculateSubtotal().toFixed(2),
-      discountType: discountType,
-      discountValue: discountValue,
-      discountAmount: calculateDiscount().toFixed(2),
-      taxRate: taxRate,
-      taxAmount: calculateTax().toFixed(2),
-      grandTotal: calculateTotal().toFixed(2),
-      status: invoiceStatus
-    };
+    try {
+      const invoiceNumber = await generateInvoiceNumber();
+      const customer = selectedCustomer ? customers.find(c => c.phone === selectedCustomer) : null;
 
-    // Update product quantities
-    const updatedProducts = products.map(product => {
-      const soldProduct = selectedProducts.find(sp => sp.id === product.id);
-      if (soldProduct) {
-        return {
-          ...product,
-          quantity: Math.max(0, product.quantity - soldProduct.quantity)
-        };
+      const newInvoice = {
+        invoice_number: invoiceNumber,
+        customer_id: customer?.id || null,
+        customer_phone: selectedCustomer || null,
+        customer_name: customer?.name || null,
+        items: selectedProducts,
+        sub_total: calculateSubtotal(),
+        discount_type: discountType,
+        discount_value: discountValue,
+        discount_amount: calculateDiscount(),
+        tax_rate: taxRate,
+        tax_amount: calculateTax(),
+        grand_total: calculateTotal(),
+        status: invoiceStatus
+      };
+
+      // Save invoice to Supabase
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .insert(newInvoice);
+
+      if (invoiceError) {
+        toast.error('Failed to save invoice: ' + invoiceError.message);
+        return;
       }
-      return product;
-    });
-    
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
-    
-    invoices.push(newInvoice);
-    localStorage.setItem('invoices', JSON.stringify(invoices));
-    
-    toast.success(`Invoice ${newInvoice.invoiceNumber} saved successfully`);
-    
-    // Reset form
-    setSelectedProducts([]);
-    setSelectedCustomer('');
-    setTaxRate(0);
-    setDiscountType('amount');
-    setDiscountValue(0);
-    setInvoiceStatus('unpaid');
-    setProducts(updatedProducts);
+
+      // Update product quantities in Supabase
+      const updatePromises = selectedProducts.map(async (soldProduct) => {
+        const product = products.find(p => p.id === soldProduct.id);
+        if (product) {
+          const newQuantity = Math.max(0, product.quantity - soldProduct.quantity);
+          return supabase
+            .from('products')
+            .update({ quantity: newQuantity })
+            .eq('id', product.id);
+        }
+      });
+
+      await Promise.all(updatePromises);
+      
+      toast.success(`Invoice ${invoiceNumber} saved successfully`);
+      
+      // Reset form and reload data
+      setSelectedProducts([]);
+      setSelectedCustomer('');
+      setTaxRate(0);
+      setDiscountType('amount');
+      setDiscountValue(0);
+      setInvoiceStatus('unpaid');
+      await loadData();
+    } catch (error) {
+      toast.error('Failed to save invoice: ' + error.message);
+    }
   };
 
   const printInvoice = () => {
@@ -159,7 +202,7 @@ const CreateInvoice = () => {
     const printContent = `
       <div style="padding: 20px; font-family: Arial, sans-serif;">
         <h1>Invoice Preview</h1>
-        <p><strong>Invoice Number:</strong> ${generateInvoiceNumber()}</p>
+        <p><strong>Invoice Number:</strong> ${await generateInvoiceNumber()}</p>
         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
         ${selectedCustomer ? `<p><strong>Customer:</strong> ${customers.find(c => c.phone === selectedCustomer)?.name} (${selectedCustomer})</p>` : ''}
         <hr>
