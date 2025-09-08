@@ -192,17 +192,19 @@ const CreateInvoice = () => {
     }
   };
 
-  const printInvoice = () => {
+  const printInvoice = async () => {
     if (selectedProducts.length === 0) {
       toast.error('Please add products to print invoice');
       return;
     }
     
+    const invoiceNumber = await generateInvoiceNumber();
+    
     // Create print content
     const printContent = `
       <div style="padding: 20px; font-family: Arial, sans-serif;">
         <h1>Invoice Preview</h1>
-        <p><strong>Invoice Number:</strong> ${await generateInvoiceNumber()}</p>
+        <p><strong>Invoice Number:</strong> ${invoiceNumber}</p>
         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
         ${selectedCustomer ? `<p><strong>Customer:</strong> ${customers.find(c => c.phone === selectedCustomer)?.name} (${selectedCustomer})</p>` : ''}
         <hr>

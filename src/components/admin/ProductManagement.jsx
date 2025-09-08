@@ -51,6 +51,17 @@ const ProductManagement = () => {
       return;
     }
 
+    // Check for duplicate SKU if SKU is provided
+    if (formData.sku.trim()) {
+      const existingSku = products.find(p => 
+        p.sku === formData.sku.trim() && p.id !== editingProduct?.id
+      );
+      if (existingSku) {
+        toast.error('SKU number already exists. Please use a unique SKU.');
+        return;
+      }
+    }
+
     const productData = {
       name: formData.name.trim(),
       barcode: formData.barcode.trim() || null,
