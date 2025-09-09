@@ -9,6 +9,7 @@ import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image } from "l
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
+import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);

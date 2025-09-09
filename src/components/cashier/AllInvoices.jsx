@@ -6,11 +6,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, Filter, Search, Printer } from "lucide-react";
+import { FileText, Filter, Search, Printer, Download } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { generateThermalPrint } from "@/utils/thermalPrintGenerator";
+import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
@@ -139,6 +139,27 @@ const AllInvoices = () => {
     }
   };
 
+  const saveInvoiceAsImage = async (invoice) => {
+    const invoiceData = {
+      invoiceNumber: invoice.invoice_number,
+      customerName: invoice.customer_name || '',
+      customerPhone: invoice.customer_phone || '',
+      items: invoice.items,
+      subTotal: invoice.sub_total,
+      discountAmount: invoice.discount_amount || 0,
+      taxRate: invoice.tax_rate || 0,
+      taxAmount: invoice.tax_amount || 0,
+      grandTotal: invoice.grand_total
+    };
+    
+    try {
+      await saveAsImage(invoiceData);
+      toast.success('Invoice saved as image');
+    } catch (error) {
+      toast.error('Failed to save invoice as image');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -243,6 +264,16 @@ const AllInvoices = () => {
                         >
                           <Printer className="w-3 h-3" />
                           Print
+                        </Button>
+                        
+                        <Button
+                          onClick={() => saveInvoiceAsImage(invoice)}
+                          size="sm"
+                          variant="outline"
+                          className="flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          Save
                         </Button>
                         
                         <div className="flex items-center gap-2">
