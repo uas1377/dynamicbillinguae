@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const AdminSettings = () => {
@@ -13,6 +13,21 @@ const AdminSettings = () => {
     newPassword: '',
     confirmPassword: ''
   });
+
+  const [businessSettings, setBusinessSettings] = useState({
+    businessName: '',
+    address: '',
+    phone: '',
+    email: ''
+  });
+
+  // Load business settings on mount
+  React.useEffect(() => {
+    const savedSettings = localStorage.getItem('businessSettings');
+    if (savedSettings) {
+      setBusinessSettings(JSON.parse(savedSettings));
+    }
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -48,8 +63,79 @@ const AdminSettings = () => {
     });
   };
 
+  const handleBusinessSettingsSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!businessSettings.businessName.trim()) {
+      toast.error('Business name is required');
+      return;
+    }
+
+    localStorage.setItem('businessSettings', JSON.stringify(businessSettings));
+    toast.success('Business settings updated successfully');
+  };
+
   return (
     <div className="space-y-6">
+      <Card className="gradient-card shadow-soft border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Business Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleBusinessSettingsSubmit} className="space-y-4 max-w-md">
+            <div className="space-y-2">
+              <Label htmlFor="businessName">Business Name *</Label>
+              <Input
+                id="businessName"
+                placeholder="Enter business name"
+                value={businessSettings.businessName}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, businessName: e.target.value })}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                placeholder="Enter business address"
+                value={businessSettings.address}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, address: e.target.value })}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                placeholder="Enter business phone"
+                value={businessSettings.phone}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter business email"
+                value={businessSettings.email}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, email: e.target.value })}
+              />
+            </div>
+            
+            <Button type="submit" className="gradient-primary text-white border-0 flex items-center gap-2">
+              <Save className="w-4 h-4" />
+              Save Business Settings
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <Card className="gradient-card shadow-soft border-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

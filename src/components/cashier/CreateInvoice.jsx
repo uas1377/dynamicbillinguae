@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Minus, ShoppingCart, FileText, Printer } from "lucide-react";
+import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
@@ -199,49 +199,55 @@ const CreateInvoice = () => {
     }
     
     const invoiceNumber = await generateInvoiceNumber();
+    const customer = customers.find(c => c.phone === selectedCustomer);
     
-    // Create print content
-    const printContent = `
-      <div style="padding: 20px; font-family: Arial, sans-serif;">
-        <h1>Invoice Preview</h1>
-        <p><strong>Invoice Number:</strong> ${invoiceNumber}</p>
-        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-        ${selectedCustomer ? `<p><strong>Customer:</strong> ${customers.find(c => c.phone === selectedCustomer)?.name} (${selectedCustomer})</p>` : ''}
-        <hr>
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="border-bottom: 2px solid #333;">
-              <th style="text-align: left; padding: 8px;">Product</th>
-              <th style="text-align: center; padding: 8px;">Qty</th>
-              <th style="text-align: right; padding: 8px;">Rate</th>
-              <th style="text-align: right; padding: 8px;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${selectedProducts.map(product => `
-              <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 8px;">${product.name}</td>
-                <td style="text-align: center; padding: 8px;">${product.quantity}</td>
-                <td style="text-align: right; padding: 8px;">${formatCurrency(product.amount)}</td>
-                <td style="text-align: right; padding: 8px;">${formatCurrency(product.quantity * product.amount)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <hr>
-        <div style="text-align: right; margin-top: 20px;">
-          <p><strong>Subtotal: ${formatCurrency(calculateSubtotal())}</strong></p>
-          ${calculateDiscount() > 0 ? `<p><strong>Discount: -${formatCurrency(calculateDiscount())}</strong></p>` : ''}
-          ${taxRate > 0 ? `<p><strong>Tax (${taxRate}%): ${formatCurrency(calculateTax())}</strong></p>` : ''}
-          <p style="font-size: 18px;"><strong>Total: ${formatCurrency(calculateTotal())}</strong></p>
-        </div>
-      </div>
-    `;
+    const invoiceData = {
+      invoiceNumber,
+      customerName: customer?.name || '',
+      customerPhone: selectedCustomer || '',
+      items: selectedProducts,
+      subTotal: calculateSubtotal().toFixed(2),
+      discountAmount: calculateDiscount().toFixed(2),
+      taxRate: taxRate,
+      taxAmount: calculateTax().toFixed(2),
+      grandTotal: calculateTotal().toFixed(2)
+    };
     
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.print();
+    try {
+      await generateThermalPrint(invoiceData);
+      toast.success('Invoice sent to printer');
+    } catch (error) {
+      toast.error('Failed to print invoice');
+    }
+  };
+
+  const saveAsImageHandler = async () => {
+    if (selectedProducts.length === 0) {
+      toast.error('Please add products to save invoice');
+      return;
+    }
+    
+    const invoiceNumber = await generateInvoiceNumber();
+    const customer = customers.find(c => c.phone === selectedCustomer);
+    
+    const invoiceData = {
+      invoiceNumber,
+      customerName: customer?.name || '',
+      customerPhone: selectedCustomer || '',
+      items: selectedProducts,
+      subTotal: calculateSubtotal().toFixed(2),
+      discountAmount: calculateDiscount().toFixed(2),
+      taxRate: taxRate,
+      taxAmount: calculateTax().toFixed(2),
+      grandTotal: calculateTotal().toFixed(2)
+    };
+    
+    try {
+      await saveAsImage(invoiceData);
+      toast.success('Invoice saved as image');
+    } catch (error) {
+      toast.error('Failed to save invoice as image');
+    }
   };
 
   return (
@@ -438,6 +444,10 @@ const CreateInvoice = () => {
                     <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2">
                       <Printer className="w-4 h-4" />
                       Print
+                    </Button>
+                    <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2">
+                      <Image className="w-4 h-4" />
+                      Save as Image
                     </Button>
                     <Button onClick={saveInvoice} className="gradient-primary text-white border-0">
                       Save Invoice

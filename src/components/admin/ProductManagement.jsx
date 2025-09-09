@@ -18,7 +18,8 @@ const ProductManagement = () => {
     barcode: '',
     sku: '',
     quantity: '',
-    price: ''
+    price: '',
+    discountLimit: ''
   });
 
   useEffect(() => {
@@ -68,6 +69,7 @@ const ProductManagement = () => {
       sku: formData.sku.trim() || null,
       quantity: parseInt(formData.quantity) || 0,
       price: parseFloat(formData.price) || 0,
+      discount_limit: parseFloat(formData.discountLimit) || 0,
     };
 
     try {
@@ -108,7 +110,8 @@ const ProductManagement = () => {
       barcode: product?.barcode || '',
       sku: product?.sku || '',
       quantity: product?.quantity?.toString() || '',
-      price: product?.price?.toString() || ''
+      price: product?.price?.toString() || '',
+      discountLimit: product?.discount_limit?.toString() || ''
     });
     setIsDialogOpen(true);
   };
@@ -116,7 +119,7 @@ const ProductManagement = () => {
   const closeDialog = () => {
     setIsDialogOpen(false);
     setEditingProduct(null);
-    setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '' });
+    setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '', discountLimit: '' });
   };
 
   const deleteProduct = async (productId) => {
@@ -171,6 +174,7 @@ const ProductManagement = () => {
                           {product.sku && <p>SKU: {product.sku}</p>}
                           <p>Quantity: {product.quantity}</p>
                           <p>Price: {formatCurrency(product.price || 0)}</p>
+                          {product.discount_limit > 0 && <p>Max Discount: {product.discount_limit}%</p>}
                         </div>
                       </div>
                       
@@ -255,18 +259,32 @@ const ProductManagement = () => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="price">Price</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  placeholder="Enter price"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  min="0"
-                  step="0.01"
-                />
-              </div>
+               <div className="space-y-2">
+                 <Label htmlFor="price">Price</Label>
+                 <Input
+                   id="price"
+                   type="number"
+                   placeholder="Enter price"
+                   value={formData.price}
+                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                   min="0"
+                   step="0.01"
+                 />
+               </div>
+               
+               <div className="space-y-2">
+                 <Label htmlFor="discountLimit">Discount Limit % (Optional)</Label>
+                 <Input
+                   id="discountLimit"
+                   type="number"
+                   min="0"
+                   max="100"
+                   step="0.01"
+                   placeholder="Enter maximum discount percentage"
+                   value={formData.discountLimit}
+                   onChange={(e) => setFormData({ ...formData, discountLimit: e.target.value })}
+                 />
+               </div>
             </div>
             
             <div className="flex gap-3 justify-end">

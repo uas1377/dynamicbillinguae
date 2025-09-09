@@ -6,10 +6,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, Filter, Search } from "lucide-react";
+import { FileText, Filter, Search, Printer } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { generateThermalPrint } from "@/utils/thermalPrintGenerator";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
@@ -117,6 +118,27 @@ const AllInvoices = () => {
     }
   };
 
+  const printInvoice = async (invoice) => {
+    const invoiceData = {
+      invoiceNumber: invoice.invoice_number,
+      customerName: invoice.customer_name || '',
+      customerPhone: invoice.customer_phone || '',
+      items: invoice.items,
+      subTotal: invoice.sub_total,
+      discountAmount: invoice.discount_amount || 0,
+      taxRate: invoice.tax_rate || 0,
+      taxAmount: invoice.tax_amount || 0,
+      grandTotal: invoice.grand_total
+    };
+    
+    try {
+      await generateThermalPrint(invoiceData);
+      toast.success('Invoice sent to printer');
+    } catch (error) {
+      toast.error('Failed to print invoice');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -213,6 +235,16 @@ const AllInvoices = () => {
                       </div>
                       
                       <div className="flex items-center gap-3">
+                        <Button
+                          onClick={() => printInvoice(invoice)}
+                          size="sm"
+                          variant="outline"
+                          className="flex items-center gap-1"
+                        >
+                          <Printer className="w-3 h-3" />
+                          Print
+                        </Button>
+                        
                         <div className="flex items-center gap-2">
                           <Label htmlFor={`status-${invoice.id}`} className="text-sm">
                             {invoice.status === 'paid' ? 'Paid' : 'Unpaid'}
