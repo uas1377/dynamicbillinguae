@@ -16,6 +16,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <div className="status-bar-overlay"></div>
       <Toaster />
       <BrowserRouter>
         <Routes>

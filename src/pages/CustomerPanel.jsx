@@ -1,26 +1,37 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
-import { LogOut, FileText, Calendar, DollarSign } from "lucide-react";
+import { LogOut, FileText, DollarSign, Clock, Share2, Calendar } from "lucide-react";
+import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 
 const CustomerPanel = () => {
-  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
   const [customerInvoices, setCustomerInvoices] = useState([]);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const sharedPhone = searchParams.get('phone');
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    if (!user.role || user.role !== 'customer') {
-      navigate('/');
-      return;
+    if (sharedPhone) {
+      // Direct access via shared link
+      const sharedUser = { phone: sharedPhone, role: 'customer', name: 'Customer' };
+      setCurrentUser(sharedUser);
+      loadCustomerInvoices(sharedPhone);
+    } else {
+      // Regular login access
+      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (!user.role || user.role !== 'customer') {
+        navigate('/');
+        return;
+      }
+      setCurrentUser(user);
+      loadCustomerInvoices(user.phone);
     }
-    setCurrentUser(user);
-    loadCustomerInvoices(user.phone);
-  }, [navigate]);
+  }, [navigate, sharedPhone]);
 
   const loadCustomerInvoices = async (customerPhone) => {
     try {
@@ -42,8 +53,25 @@ const CustomerPanel = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    if (!sharedPhone) {
+      localStorage.removeItem('currentUser');
+    }
     navigate('/');
+  };
+
+  const shareCustomerLink = () => {
+    const shareUrl = `${window.location.origin}/customer?phone=${encodeURIComponent(currentUser.phone)}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'Customer Access Link',
+        text: 'Direct link to view your invoices',
+        url: shareUrl,
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('Customer link copied to clipboard!');
+    }
   };
 
   if (!currentUser) return null;
@@ -56,20 +84,28 @@ const CustomerPanel = () => {
     <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
         <Card className="gradient-card shadow-soft border-0 mb-6">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-3xl font-bold text-primary">Customer Portal</CardTitle>
-              <p className="text-muted-foreground mt-2">Phone: {currentUser.phone}</p>
+              <p className="text-muted-foreground mt-2">
+                {sharedPhone ? `Viewing invoices for ${currentUser.phone}` : `Phone: ${currentUser.phone}`}
+              </p>
             </div>
-            <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={shareCustomerLink} variant="outline" className="flex items-center gap-2">
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+              <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">
+                <LogOut className="w-4 h-4" />
+                {sharedPhone ? 'Back' : 'Logout'}
+              </Button>
+            </div>
           </CardHeader>
         </Card>
 
         {/* Statistics */}
-        <div className="grid md:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card className="gradient-card shadow-soft border-0">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -140,7 +176,7 @@ const CustomerPanel = () => {
                         </Badge>
                       </div>
                       
-                      <div className="grid md:grid-cols-2 gap-4 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />

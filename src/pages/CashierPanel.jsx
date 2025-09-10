@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { Package, Users, FileText, List, LogOut } from "lucide-react";
 import AddProduct from "@/components/cashier/AddProduct";
-import AddCustomer from "@/components/cashier/AddCustomer";
+import CustomerManagement from "@/components/cashier/CustomerManagement";
 import CreateInvoice from "@/components/cashier/CreateInvoice";
 import AllInvoices from "@/components/cashier/AllInvoices";
 
@@ -69,9 +69,9 @@ const CashierPanel = () => {
             <AddProduct />
           </TabsContent>
 
-          <TabsContent value="add-customer">
-            <AddCustomer />
-          </TabsContent>
+            <TabsContent value="add-customer">
+              <CustomerManagement />
+            </TabsContent>
 
           <TabsContent value="create-invoice">
             <CreateInvoice />

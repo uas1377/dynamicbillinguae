@@ -281,7 +281,7 @@ const CreateInvoice = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {products.map((product) => (
               <Card 
                 key={product.id} 
@@ -322,13 +322,13 @@ const CreateInvoice = () => {
           <CardContent>
             <div className="space-y-4">
               {selectedProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
                   <div className="flex-1">
                     <h3 className="font-semibold">{product.name}</h3>
                     {product.sku && <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>}
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
@@ -347,7 +347,7 @@ const CreateInvoice = () => {
                       </Button>
                     </div>
                     
-                    <div className="w-24">
+                    <div className="w-full sm:w-24">
                       <Input
                         type="number"
                         placeholder="Rate"
@@ -358,7 +358,7 @@ const CreateInvoice = () => {
                       />
                     </div>
                     
-                    <div className="w-24 text-right font-semibold">
+                    <div className="w-full sm:w-24 text-left sm:text-right font-semibold">
                       {formatCurrency(product.quantity * product.amount)}
                     </div>
                   </div>
@@ -366,7 +366,7 @@ const CreateInvoice = () => {
               ))}
               
               <div className="border-t pt-4">
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div className="space-y-2">
                     <Label htmlFor="customer">Customer (Optional)</Label>
                     <div className="relative">
@@ -426,7 +426,7 @@ const CreateInvoice = () => {
                   </div>
                 </div>
                 
-                <div className="grid md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="space-y-2">
                     <Label htmlFor="discountType">Discount Type</Label>
                     <Select value={discountType} onValueChange={setDiscountType}>

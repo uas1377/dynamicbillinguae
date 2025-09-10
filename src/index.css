@@ -10,25 +10,26 @@
     --card-foreground: 195 100% 20%;
     --popover: 50 60% 98%;
     --popover-foreground: 195 100% 20%;
-    --primary: 180 80% 50%;
+    --primary: 180 85% 55%;
     --primary-foreground: 45 50% 95%;
-    --secondary: 165 60% 75%;
+    --secondary: 165 70% 70%;
     --secondary-foreground: 195 100% 20%;
     --muted: 45 30% 90%;
     --muted-foreground: 195 50% 40%;
-    --accent: 150 70% 60%;
+    --accent: 150 75% 65%;
     --accent-foreground: 45 50% 95%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 45 40% 85%;
     --input: 45 40% 85%;
-    --ring: 180 80% 50%;
+    --ring: 180 85% 55%;
     --radius: 0.75rem;
     
-    /* Custom gradients */
-    --gradient-background: linear-gradient(135deg, hsl(45 60% 92%), hsl(50 70% 88%));
-    --gradient-primary: linear-gradient(135deg, hsl(180 80% 50%), hsl(150 70% 60%));
-    --gradient-card: linear-gradient(135deg, hsl(50 60% 98%), hsl(45 50% 96%));
+    /* Custom gradients - Cyan to Light Green */
+    --gradient-background: linear-gradient(135deg, hsl(180 60% 92%), hsl(150 70% 88%));
+    --gradient-primary: linear-gradient(135deg, hsl(180 85% 55%), hsl(150 75% 65%));
+    --gradient-card: linear-gradient(135deg, hsl(180 60% 98%), hsl(150 50% 96%));
+    --gradient-status: linear-gradient(135deg, hsl(180 85% 55%), hsl(150 75% 65%));
     --shadow-soft: 0 4px 20px hsl(180 50% 80% / 0.3);
     --shadow-hover: 0 8px 30px hsl(180 50% 70% / 0.4);
   }
@@ -54,10 +55,11 @@
     --input: 195 30% 20%;
     --ring: 180 80% 60%;
     
-    /* Dark mode gradients */
-    --gradient-background: linear-gradient(135deg, hsl(195 50% 8%), hsl(200 45% 12%));
-    --gradient-primary: linear-gradient(135deg, hsl(180 80% 60%), hsl(150 70% 50%));
-    --gradient-card: linear-gradient(135deg, hsl(195 50% 10%), hsl(200 45% 14%));
+    /* Dark mode gradients - Cyan to Light Green */
+    --gradient-background: linear-gradient(135deg, hsl(180 50% 8%), hsl(150 45% 12%));
+    --gradient-primary: linear-gradient(135deg, hsl(180 85% 55%), hsl(150 75% 65%));
+    --gradient-card: linear-gradient(135deg, hsl(180 50% 10%), hsl(150 45% 14%));
+    --gradient-status: linear-gradient(135deg, hsl(180 85% 55%), hsl(150 75% 65%));
     --shadow-soft: 0 4px 20px hsl(195 80% 5% / 0.5);
     --shadow-hover: 0 8px 30px hsl(195 80% 5% / 0.7);
   }
@@ -87,5 +89,25 @@
   
   .shadow-hover {
     box-shadow: var(--shadow-hover);
+  }
+  
+  .gradient-status {
+    background: var(--gradient-status);
+  }
+  
+  /* Mobile app status bar styling */
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  /* Status bar overlay for mobile apps */
+  .status-bar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0);
+    background: var(--gradient-status);
+    z-index: 9999;
   }
 }
