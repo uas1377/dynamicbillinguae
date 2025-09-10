@@ -54,11 +54,24 @@ const ProductManagement = () => {
 
     // Check for duplicate SKU if SKU is provided
     if (formData.sku.trim()) {
-      const existingSku = products.find(p => 
-        p.sku === formData.sku.trim() && p.id !== editingProduct?.id
-      );
-      if (existingSku) {
-        toast.error('SKU number already exists. Please use a unique SKU.');
+      try {
+        const { data: existingProducts, error } = await supabase
+          .from('products')
+          .select('id, sku')
+          .eq('sku', formData.sku.trim());
+
+        if (error) {
+          toast.error('Error checking SKU: ' + error.message);
+          return;
+        }
+
+        const duplicateSku = existingProducts?.find(p => p.id !== editingProduct?.id);
+        if (duplicateSku) {
+          toast.error('SKU number already exists. Please use a unique SKU.');
+          return;
+        }
+      } catch (error) {
+        toast.error('Error validating SKU: ' + error.message);
         return;
       }
     }

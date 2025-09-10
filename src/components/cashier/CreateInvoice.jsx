@@ -14,6 +14,8 @@ import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState('');
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [taxRate, setTaxRate] = useState(0);
@@ -42,10 +44,25 @@ const CreateInvoice = () => {
         toast.error('Failed to load customers: ' + customersRes.error.message);
       } else {
         setCustomers(customersRes.data || []);
+        setFilteredCustomers(customersRes.data || []);
       }
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
     }
+  };
+
+  const filterCustomers = (searchTerm) => {
+    setCustomerSearch(searchTerm);
+    if (!searchTerm.trim()) {
+      setFilteredCustomers(customers);
+      return;
+    }
+    
+    const filtered = customers.filter(customer => 
+      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.phone.includes(searchTerm)
+    );
+    setFilteredCustomers(filtered);
   };
 
   const addProductToInvoice = (product) => {
@@ -183,6 +200,7 @@ const CreateInvoice = () => {
       // Reset form and reload data
       setSelectedProducts([]);
       setSelectedCustomer('');
+      setCustomerSearch('');
       setTaxRate(0);
       setDiscountType('amount');
       setDiscountValue(0);
@@ -350,18 +368,46 @@ const CreateInvoice = () => {
                 <div className="grid md:grid-cols-2 gap-4 mb-4">
                   <div className="space-y-2">
                     <Label htmlFor="customer">Customer (Optional)</Label>
-                    <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select customer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.phone}>
-                            {customer.name} - {customer.phone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="relative">
+                      <Input
+                        placeholder="Search customer by name or phone..."
+                        value={customerSearch}
+                        onChange={(e) => filterCustomers(e.target.value)}
+                        className="mb-2"
+                      />
+                      {customerSearch && filteredCustomers.length > 0 && (
+                        <div className="absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                          {filteredCustomers.map((customer) => (
+                            <div
+                              key={customer.id}
+                              className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                              onClick={() => {
+                                setSelectedCustomer(customer.phone);
+                                setCustomerSearch(`${customer.name} - ${customer.phone}`);
+                                setFilteredCustomers([]);
+                              }}
+                            >
+                              <div className="font-medium">{customer.name}</div>
+                              <div className="text-sm text-muted-foreground">{customer.phone}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!customerSearch && (
+                        <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Or select from dropdown" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background">
+                            {customers.map((customer) => (
+                              <SelectItem key={customer.id} value={customer.phone}>
+                                {customer.name} - {customer.phone}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
