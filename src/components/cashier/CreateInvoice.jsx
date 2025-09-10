@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
+import SearchableCustomerSelect from "@/components/ui/SearchableCustomerSelect";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);

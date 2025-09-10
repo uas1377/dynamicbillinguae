@@ -61,7 +61,7 @@ const ProductManagement = () => {
           .eq('sku', formData.sku.trim());
 
         if (error) {
-          toast.error('Error checking SKU: ' + error.message);
+          toast.error('Failed to validate SKU: ' + error.message);
           return;
         }
 
@@ -71,7 +71,7 @@ const ProductManagement = () => {
           return;
         }
       } catch (error) {
-        toast.error('Error validating SKU: ' + error.message);
+        toast.error('Failed to validate SKU: ' + error.message);
         return;
       }
     }
