@@ -488,16 +488,16 @@ const CreateInvoice = () => {
                     </Badge>
                   </div>
                   
-                  <div className="flex gap-3">
-                    <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
                       <Printer className="w-4 h-4" />
                       Print
                     </Button>
-                    <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2">
+                    <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
                       <Image className="w-4 h-4" />
                       Save as Image
                     </Button>
-                    <Button onClick={saveInvoice} className="gradient-primary text-white border-0">
+                    <Button onClick={saveInvoice} className="gradient-primary text-white border-0 w-full sm:w-auto">
                       Save Invoice
                     </Button>
                   </div>

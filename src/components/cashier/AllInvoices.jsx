@@ -255,12 +255,12 @@ const AllInvoices = () => {
                         </Badge>
                       </div>
                       
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
                         <Button
                           onClick={() => printInvoice(invoice)}
                           size="sm"
                           variant="outline"
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 w-full sm:w-auto"
                         >
                           <Printer className="w-3 h-3" />
                           Print
@@ -270,7 +270,7 @@ const AllInvoices = () => {
                           onClick={() => saveInvoiceAsImage(invoice)}
                           size="sm"
                           variant="outline"
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 w-full sm:w-auto"
                         >
                           <Download className="w-3 h-3" />
                           Save
