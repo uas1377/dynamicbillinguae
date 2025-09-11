@@ -7,38 +7,61 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, ShoppingCart, Shield, Phone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const RoleSelection = () => {
   const [loginModal, setLoginModal] = useState(null);
   const [credentials, setCredentials] = useState({ username: '', password: '', phone: '' });
   const navigate = useNavigate();
 
-  const handleLogin = (role) => {
+  const handleLogin = async (role) => {
     if (role === 'customer') {
       if (!credentials.phone) {
         toast.error('Please enter phone number');
         return;
       }
-      localStorage.setItem('currentUser', JSON.stringify({ role: 'customer', phone: credentials.phone }));
+      sessionStorage.setItem('currentUser', JSON.stringify({ role: 'customer', phone: credentials.phone }));
       navigate('/customer');
     } else {
-      // Check credentials based on role
-      if (role === 'admin') {
-        const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
-        if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
-          toast.error('Invalid admin credentials');
-          return;
+      try {
+        // Check credentials based on role
+        if (role === 'admin') {
+          const { data: adminSettings, error } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'admin_credentials')
+            .single();
+
+          if (error || !adminSettings) {
+            toast.error('Failed to verify admin credentials');
+            return;
+          }
+
+          const adminCreds = adminSettings.setting_value;
+          if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
+            toast.error('Invalid admin credentials');
+            return;
+          }
+        } else if (role === 'cashier') {
+          const { data: cashiers, error } = await supabase
+            .from('cashiers')
+            .select('*')
+            .eq('username', credentials.username)
+            .eq('password', credentials.password)
+            .single();
+
+          if (error || !cashiers) {
+            toast.error('Invalid cashier credentials');
+            return;
+          }
         }
-      } else if (role === 'cashier') {
-        const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"username":"aaa","password":"aaa"}]');
-        const validCashier = cashiers.find(c => c.username === credentials.username && c.password === credentials.password);
-        if (!validCashier) {
-          toast.error('Invalid cashier credentials');
-          return;
-        }
+        
+        sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
+        navigate(`/${role}`);
+      } catch (error) {
+        toast.error('Login failed: ' + error.message);
+        return;
       }
-      localStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
-      navigate(`/${role}`);
     }
     setLoginModal(null);
     setCredentials({ username: '', password: '', phone: '' });

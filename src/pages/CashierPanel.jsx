@@ -14,7 +14,7 @@ const CashierPanel = () => {
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     if (!user.role || user.role !== 'cashier') {
       navigate('/');
       return;
@@ -23,7 +23,7 @@ const CashierPanel = () => {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    sessionStorage.clear();
     navigate('/');
   };
 

@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Settings, Save, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminSettings = () => {
   const [adminCredentials, setAdminCredentials] = useState({
-    username: 'aaa',
-    password: 'aaa',
+    username: '',
+    password: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -21,15 +22,49 @@ const AdminSettings = () => {
     email: ''
   });
 
-  // Load business settings on mount
-  React.useEffect(() => {
-    const savedSettings = localStorage.getItem('businessSettings');
-    if (savedSettings) {
-      setBusinessSettings(JSON.parse(savedSettings));
-    }
+  // Load settings from Supabase on mount
+  useEffect(() => {
+    loadSettings();
   }, []);
 
-  const handleSubmit = (e) => {
+  const loadSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('*');
+
+      if (error) {
+        toast.error('Failed to load settings: ' + error.message);
+        return;
+      }
+
+      const settings = {};
+      data.forEach(item => {
+        settings[item.setting_key] = item.setting_value;
+      });
+
+      if (settings.admin_credentials) {
+        setAdminCredentials(prev => ({
+          ...prev,
+          username: settings.admin_credentials.username,
+          password: settings.admin_credentials.password
+        }));
+      }
+
+      if (settings.business_settings) {
+        setBusinessSettings({
+          businessName: settings.business_settings.name || '',
+          address: settings.business_settings.address || '',
+          phone: settings.business_settings.phone || '',
+          email: settings.business_settings.email || ''
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to load settings: ' + error.message);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!adminCredentials.username.trim()) {
@@ -42,28 +77,37 @@ const AdminSettings = () => {
       return;
     }
 
-    // For now, we'll just store in localStorage
-    // In a real application, this would be handled more securely
-    const adminData = {
-      username: adminCredentials.username.trim(),
-      password: adminCredentials.newPassword || adminCredentials.password,
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      const newCredentials = {
+        username: adminCredentials.username.trim(),
+        password: adminCredentials.newPassword || adminCredentials.password
+      };
 
-    localStorage.setItem('adminCredentials', JSON.stringify(adminData));
-    
-    toast.success('Admin settings updated successfully');
-    
-    // Reset form
-    setAdminCredentials({
-      username: adminData.username,
-      password: adminData.password,
-      newPassword: '',
-      confirmPassword: ''
-    });
+      const { error } = await supabase
+        .from('admin_settings')
+        .update({ setting_value: newCredentials })
+        .eq('setting_key', 'admin_credentials');
+
+      if (error) {
+        toast.error('Failed to update admin settings: ' + error.message);
+        return;
+      }
+      
+      toast.success('Admin settings updated successfully');
+      
+      // Reset form
+      setAdminCredentials({
+        username: newCredentials.username,
+        password: newCredentials.password,
+        newPassword: '',
+        confirmPassword: ''
+      });
+    } catch (error) {
+      toast.error('Failed to update admin settings: ' + error.message);
+    }
   };
 
-  const handleBusinessSettingsSubmit = (e) => {
+  const handleBusinessSettingsSubmit = async (e) => {
     e.preventDefault();
     
     if (!businessSettings.businessName.trim()) {
@@ -71,8 +115,28 @@ const AdminSettings = () => {
       return;
     }
 
-    localStorage.setItem('businessSettings', JSON.stringify(businessSettings));
-    toast.success('Business settings updated successfully');
+    try {
+      const businessData = {
+        name: businessSettings.businessName,
+        address: businessSettings.address,
+        phone: businessSettings.phone,
+        email: businessSettings.email
+      };
+
+      const { error } = await supabase
+        .from('admin_settings')
+        .update({ setting_value: businessData })
+        .eq('setting_key', 'business_settings');
+
+      if (error) {
+        toast.error('Failed to update business settings: ' + error.message);
+        return;
+      }
+
+      toast.success('Business settings updated successfully');
+    } catch (error) {
+      toast.error('Failed to update business settings: ' + error.message);
+    }
   };
 
   return (
@@ -212,7 +276,7 @@ const AdminSettings = () => {
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Database:</span>
-              <span>Local Storage</span>
+              <span>Supabase</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Last Updated:</span>
@@ -230,21 +294,33 @@ const AdminSettings = () => {
           <div className="space-y-4">
             <Button 
               variant="outline" 
-              onClick={() => {
-                const data = {
-                  products: JSON.parse(localStorage.getItem('products') || '[]'),
-                  customers: JSON.parse(localStorage.getItem('customers') || '[]'),
-                  invoices: JSON.parse(localStorage.getItem('invoices') || '[]'),
-                  cashiers: JSON.parse(localStorage.getItem('cashiers') || '[]'),
-                };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `billing-backup-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                toast.success('Data exported successfully');
+              onClick={async () => {
+                try {
+                  const [productsRes, customersRes, invoicesRes, cashiersRes] = await Promise.all([
+                    supabase.from('products').select('*'),
+                    supabase.from('customers').select('*'),
+                    supabase.from('invoices').select('*'),
+                    supabase.from('cashiers').select('*')
+                  ]);
+
+                  const data = {
+                    products: productsRes.data || [],
+                    customers: customersRes.data || [],
+                    invoices: invoicesRes.data || [],
+                    cashiers: cashiersRes.data || []
+                  };
+
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `billing-backup-${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success('Data exported successfully');
+                } catch (error) {
+                  toast.error('Failed to export data: ' + error.message);
+                }
               }}
             >
               Export Data

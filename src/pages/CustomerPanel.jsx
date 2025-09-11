@@ -23,7 +23,7 @@ const CustomerPanel = () => {
       loadCustomerInvoices(sharedPhone);
     } else {
       // Regular login access
-      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
       if (!user.role || user.role !== 'customer') {
         navigate('/');
         return;
@@ -54,7 +54,7 @@ const CustomerPanel = () => {
 
   const handleLogout = () => {
     if (!sharedPhone) {
-      localStorage.removeItem('currentUser');
+      sessionStorage.clear();
     }
     navigate('/');
   };

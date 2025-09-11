@@ -13,7 +13,7 @@ const AdminPanel = () => {
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     if (!user.role || user.role !== 'admin') {
       navigate('/');
       return;
@@ -22,7 +22,7 @@ const AdminPanel = () => {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    sessionStorage.clear();
     navigate('/');
   };
 
