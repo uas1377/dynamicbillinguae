@@ -293,6 +293,7 @@ const CreateInvoice = () => {
                     <ShoppingCart className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground">Price: ₹{product.price}</p>
                   <p className="text-xs text-muted-foreground">Qty: {product.quantity}</p>
                   {product.sku && <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>}
                 </CardContent>
