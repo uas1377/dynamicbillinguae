@@ -1,6 +1,6 @@
 {
-  "name": "Galaxy Invoice - Billing Management System",
-  "short_name": "Galaxy Invoice",
+  "name": "Galaxy Billing App",
+  "short_name": "Galaxy Billing App",
   "description": "Complete billing and invoice management system with multi-role access",
   "start_url": "/",
   "display": "standalone",
