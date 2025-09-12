@@ -8,6 +8,7 @@ import { Package, Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
+import GoogleSheetsSync from "./GoogleSheetsSync";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -156,6 +157,8 @@ const ProductManagement = () => {
 
   return (
     <div className="space-y-6">
+      <GoogleSheetsSync onSyncComplete={loadProducts} />
+      
       <Card className="gradient-card shadow-soft border-0">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
