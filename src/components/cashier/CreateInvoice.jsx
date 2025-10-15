@@ -271,9 +271,9 @@ const CreateInvoice = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Product Selection */}
-      <Card className="gradient-card shadow-soft border-0">
+      <Card id="product-selection" className="gradient-card shadow-soft border-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
@@ -281,7 +281,7 @@ const CreateInvoice = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto">
             {products.map((product) => (
               <Card 
                 key={product.id} 
@@ -310,10 +310,34 @@ const CreateInvoice = () => {
           )}
         </CardContent>
       </Card>
+      
+      {/* Fixed Bottom Navigation Bar */}
+      {selectedProducts.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 p-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-base px-3 py-1">
+                {selectedProducts.length} Product{selectedProducts.length > 1 ? 's' : ''} Selected
+              </Badge>
+              <span className="text-sm font-semibold">
+                Total: {formatCurrency(calculateTotal())}
+              </span>
+            </div>
+            <Button 
+              onClick={() => {
+                document.getElementById('invoice-items')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="gradient-primary"
+            >
+              View Selected Products
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Selected Products */}
       {selectedProducts.length > 0 && (
-        <Card className="gradient-card shadow-soft border-0">
+        <Card id="invoice-items" className="gradient-card shadow-soft border-0 scroll-mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
