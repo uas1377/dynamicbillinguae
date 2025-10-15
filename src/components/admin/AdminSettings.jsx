@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save, Building2 } from "lucide-react";
+import { Settings, Save, Building2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,8 +19,11 @@ const AdminSettings = () => {
     businessName: '',
     address: '',
     phone: '',
-    email: ''
+    email: '',
+    logo: ''
   });
+
+  const [logoFile, setLogoFile] = useState(null);
 
   // Load settings from Supabase on mount
   useEffect(() => {
@@ -56,7 +59,8 @@ const AdminSettings = () => {
           businessName: settings.business_settings.name || '',
           address: settings.business_settings.address || '',
           phone: settings.business_settings.phone || '',
-          email: settings.business_settings.email || ''
+          email: settings.business_settings.email || '',
+          logo: settings.business_settings.logo || ''
         });
       }
     } catch (error) {
@@ -107,6 +111,18 @@ const AdminSettings = () => {
     }
   };
 
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    setLogoFile(file);
+  };
+
   const handleBusinessSettingsSubmit = async (e) => {
     e.preventDefault();
     
@@ -116,11 +132,43 @@ const AdminSettings = () => {
     }
 
     try {
+      let logoUrl = businessSettings.logo;
+
+      // Upload logo if a new file was selected
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `logo-${Date.now()}.${fileExt}`;
+        
+        // Delete old logo if exists
+        if (businessSettings.logo) {
+          const oldFileName = businessSettings.logo.split('/').pop();
+          await supabase.storage
+            .from('business-logos')
+            .remove([oldFileName]);
+        }
+
+        const { error: uploadError, data } = await supabase.storage
+          .from('business-logos')
+          .upload(fileName, logoFile);
+
+        if (uploadError) {
+          toast.error('Failed to upload logo: ' + uploadError.message);
+          return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('business-logos')
+          .getPublicUrl(fileName);
+
+        logoUrl = publicUrl;
+      }
+
       const businessData = {
         name: businessSettings.businessName,
         address: businessSettings.address,
         phone: businessSettings.phone,
-        email: businessSettings.email
+        email: businessSettings.email,
+        logo: logoUrl
       };
 
       const { error } = await supabase
@@ -133,6 +181,8 @@ const AdminSettings = () => {
         return;
       }
 
+      setBusinessSettings(prev => ({ ...prev, logo: logoUrl }));
+      setLogoFile(null);
       toast.success('Business settings updated successfully');
     } catch (error) {
       toast.error('Failed to update business settings: ' + error.message);
@@ -190,6 +240,36 @@ const AdminSettings = () => {
                 value={businessSettings.email}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, email: e.target.value })}
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="logo">Business Logo</Label>
+              {businessSettings.logo && (
+                <div className="mb-2">
+                  <img 
+                    src={businessSettings.logo} 
+                    alt="Business Logo" 
+                    className="h-20 w-auto object-contain border rounded p-2"
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  id="logo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="flex-1"
+                />
+                {logoFile && (
+                  <span className="text-sm text-muted-foreground">
+                    {logoFile.name}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Upload your business logo (recommended size: 200x200px)
+              </p>
             </div>
             
             <Button type="submit" className="gradient-primary text-white border-0 flex items-center gap-2">

@@ -23,6 +23,13 @@ const CreateInvoice = () => {
   const [invoiceStatus, setInvoiceStatus] = useState('unpaid');
   const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percentage'
   const [discountValue, setDiscountValue] = useState(0);
+  const [businessSettings, setBusinessSettings] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    logo: ''
+  });
 
   useEffect(() => {
     loadData();
@@ -30,9 +37,10 @@ const CreateInvoice = () => {
 
   const loadData = async () => {
     try {
-      const [productsRes, customersRes] = await Promise.all([
+      const [productsRes, customersRes, settingsRes] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').order('created_at', { ascending: false })
+        supabase.from('customers').select('*').order('created_at', { ascending: false }),
+        supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single()
       ]);
 
       if (productsRes.error) {
@@ -46,6 +54,16 @@ const CreateInvoice = () => {
       } else {
         setCustomers(customersRes.data || []);
         setFilteredCustomers(customersRes.data || []);
+      }
+
+      if (settingsRes.data?.setting_value) {
+        setBusinessSettings({
+          name: settingsRes.data.setting_value.name || '',
+          address: settingsRes.data.setting_value.address || '',
+          phone: settingsRes.data.setting_value.phone || '',
+          email: settingsRes.data.setting_value.email || '',
+          logo: settingsRes.data.setting_value.logo || ''
+        });
       }
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
@@ -230,7 +248,8 @@ const CreateInvoice = () => {
       discountAmount: calculateDiscount().toFixed(2),
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
-      grandTotal: calculateTotal().toFixed(2)
+      grandTotal: calculateTotal().toFixed(2),
+      yourCompany: businessSettings
     };
     
     try {
