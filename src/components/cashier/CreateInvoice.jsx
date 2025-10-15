@@ -278,7 +278,8 @@ const CreateInvoice = () => {
       discountAmount: calculateDiscount().toFixed(2),
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
-      grandTotal: calculateTotal().toFixed(2)
+      grandTotal: calculateTotal().toFixed(2),
+      yourCompany: businessSettings
     };
     
     try {
