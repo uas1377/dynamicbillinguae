@@ -57,6 +57,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
         </head>
         <body>
           <div class="center dashed-line">
+            ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
             <div class="large bold">${actualBusinessName}</div>
             ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
             ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
@@ -164,6 +165,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           color: black;
         ">
           <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
+            ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px; display: block;" />` : ''}
             <div style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
             ${businessSettings.address ? `<div style="font-size: 10px;">${businessSettings.address}</div>` : ''}
             ${businessSettings.phone ? `<div style="font-size: 10px;">Tel: ${businessSettings.phone}</div>` : ''}

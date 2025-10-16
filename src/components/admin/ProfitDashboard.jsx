@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, DollarSign, Percent, Calendar } from "lucide-react";
+import { TrendingUp, DollarSign, Percent, Calendar, Infinity } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
 const ProfitDashboard = () => {
+  const [showAllTime, setShowAllTime] = useState(false);
   const [startDate, setStartDate] = useState(format(new Date(new Date().setDate(1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [profitData, setProfitData] = useState({
@@ -21,16 +23,18 @@ const ProfitDashboard = () => {
 
   useEffect(() => {
     loadProfitData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, showAllTime]);
 
   const loadProfitData = async () => {
     setLoading(true);
     try {
-      const { data: invoices, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate + 'T23:59:59');
+      let query = supabase.from('invoices').select('*');
+      
+      if (!showAllTime) {
+        query = query.gte('date', startDate).lte('date', endDate + 'T23:59:59');
+      }
+      
+      const { data: invoices, error } = await query;
 
       if (error) {
         toast.error('Failed to load invoice data: ' + error.message);
@@ -77,7 +81,21 @@ const ProfitDashboard = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* All Time Toggle */}
+        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Infinity className="w-4 h-4" />
+            <Label htmlFor="allTime" className="cursor-pointer">Show All Time Profit</Label>
+          </div>
+          <Switch
+            id="allTime"
+            checked={showAllTime}
+            onCheckedChange={setShowAllTime}
+          />
+        </div>
+
         {/* Date Filter */}
+        {!showAllTime && (
         <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
           <div className="space-y-2">
             <Label htmlFor="startDate" className="flex items-center gap-2">
@@ -104,6 +122,7 @@ const ProfitDashboard = () => {
             />
           </div>
         </div>
+        )}
 
         {/* Profit Metrics */}
         {loading ? (
