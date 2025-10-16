@@ -10,11 +10,14 @@ const Template2 = ({ data }) => {
       <div className="bg-white p-8 max-w-4xl mx-auto">
         <div className="flex justify-between mb-4 border-b-2 pb-4">
           <div>
+            {yourCompany?.logo && (
+              <img src={yourCompany.logo} alt="Company Logo" className="h-12 object-contain mb-2" />
+            )}
             <h1 className="text-2xl font-bold text-cyan-700">
-              {yourCompany.name}
+              {yourCompany?.name || 'Your Company'}
             </h1>
-            <p>{yourCompany.address}</p>
-            <p>{yourCompany.phone}</p>
+            <p>{yourCompany?.address || ''}</p>
+            <p>{yourCompany?.phone || ''}</p>
           </div>
           <div className="text-right">
             <h2 className="text-xl font-semibold text-cyan-700">Tax invoice</h2>

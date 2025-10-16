@@ -20,6 +20,7 @@ const ProductManagement = () => {
     sku: '',
     quantity: '',
     price: '',
+    buyingPrice: '',
     discountLimit: ''
   });
 
@@ -83,6 +84,7 @@ const ProductManagement = () => {
       sku: formData.sku.trim() || null,
       quantity: parseInt(formData.quantity) || 0,
       price: parseFloat(formData.price) || 0,
+      buying_price: parseFloat(formData.buyingPrice) || 0,
       discount_limit: parseFloat(formData.discountLimit) || 0,
     };
 
@@ -125,6 +127,7 @@ const ProductManagement = () => {
       sku: product?.sku || '',
       quantity: product?.quantity?.toString() || '',
       price: product?.price?.toString() || '',
+      buyingPrice: product?.buying_price?.toString() || '',
       discountLimit: product?.discount_limit?.toString() || ''
     });
     setIsDialogOpen(true);
@@ -133,7 +136,7 @@ const ProductManagement = () => {
   const closeDialog = () => {
     setIsDialogOpen(false);
     setEditingProduct(null);
-    setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '', discountLimit: '' });
+    setFormData({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '', discountLimit: '' });
   };
 
   const deleteProduct = async (productId) => {
@@ -276,13 +279,26 @@ const ProductManagement = () => {
               </div>
               
                <div className="space-y-2">
-                 <Label htmlFor="price">Price</Label>
+                 <Label htmlFor="price">Selling Price</Label>
                  <Input
                    id="price"
                    type="number"
-                   placeholder="Enter price"
+                   placeholder="Enter selling price"
                    value={formData.price}
                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                   min="0"
+                   step="0.01"
+                 />
+               </div>
+               
+               <div className="space-y-2">
+                 <Label htmlFor="buyingPrice">Buying Price (Cost)</Label>
+                 <Input
+                   id="buyingPrice"
+                   type="number"
+                   placeholder="Enter buying/cost price"
+                   value={formData.buyingPrice}
+                   onChange={(e) => setFormData({ ...formData, buyingPrice: e.target.value })}
                    min="0"
                    step="0.01"
                  />

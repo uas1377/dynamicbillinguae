@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
-import { Package, Users, Settings, LogOut, Shield } from "lucide-react";
+import { Package, Users, Settings, LogOut, Shield, TrendingUp } from "lucide-react";
 import ProductManagement from "@/components/admin/ProductManagement";
 import CashierManagement from "@/components/admin/CashierManagement";
 import AdminSettings from "@/components/admin/AdminSettings";
+import ProfitDashboard from "@/components/admin/ProfitDashboard";
 
 const AdminPanel = () => {
   const navigate = useNavigate();
@@ -47,8 +48,12 @@ const AdminPanel = () => {
           </CardHeader>
         </Card>
 
-        <Tabs defaultValue="products" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+        <Tabs defaultValue="profit" className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="profit" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Profit Analysis
+            </TabsTrigger>
             <TabsTrigger value="products" className="flex items-center gap-2">
               <Package className="w-4 h-4" />
               Product Management
@@ -62,6 +67,10 @@ const AdminPanel = () => {
               Admin Settings
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="profit">
+            <ProfitDashboard />
+          </TabsContent>
 
           <TabsContent value="products">
             <ProductManagement />

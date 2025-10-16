@@ -92,7 +92,12 @@ const CreateInvoice = () => {
       updatedProducts[existingIndex].quantity += 1;
       setSelectedProducts(updatedProducts);
     } else {
-      setSelectedProducts([...selectedProducts, { ...product, quantity: 1, amount: product.price || 0 }]);
+      setSelectedProducts([...selectedProducts, { 
+        ...product, 
+        quantity: 1, 
+        amount: product.price || 0,
+        buying_price: product.buying_price || 0
+      }]);
     }
   };
 
@@ -279,7 +284,7 @@ const CreateInvoice = () => {
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
-      yourCompany: businessSettings
+      yourCompany: businessSettings || { name: '', address: '', phone: '', logo: '' }
     };
     
     try {

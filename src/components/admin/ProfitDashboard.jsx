@@ -1,0 +1,177 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { TrendingUp, DollarSign, Percent, Calendar } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/utils/formatCurrency";
+import { toast } from "sonner";
+import { format } from "date-fns";
+
+const ProfitDashboard = () => {
+  const [startDate, setStartDate] = useState(format(new Date(new Date().setDate(1)), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [profitData, setProfitData] = useState({
+    totalRevenue: 0,
+    totalCost: 0,
+    totalProfit: 0,
+    profitPercentage: 0
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadProfitData();
+  }, [startDate, endDate]);
+
+  const loadProfitData = async () => {
+    setLoading(true);
+    try {
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate + 'T23:59:59');
+
+      if (error) {
+        toast.error('Failed to load invoice data: ' + error.message);
+        return;
+      }
+
+      let totalRevenue = 0;
+      let totalCost = 0;
+
+      for (const invoice of invoices || []) {
+        const items = invoice.items || [];
+        
+        for (const item of items) {
+          // Revenue is the final amount after discount (item.total)
+          totalRevenue += parseFloat(item.total || 0);
+          
+          // Cost is buying_price * quantity
+          totalCost += parseFloat(item.buying_price || 0) * parseFloat(item.quantity || 0);
+        }
+      }
+
+      const totalProfit = totalRevenue - totalCost;
+      const profitPercentage = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+      setProfitData({
+        totalRevenue,
+        totalCost,
+        totalProfit,
+        profitPercentage
+      });
+    } catch (error) {
+      toast.error('Failed to calculate profit: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="gradient-card shadow-soft border-0">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5" />
+          Profit Analysis
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Date Filter */}
+        <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="space-y-2">
+            <Label htmlFor="startDate" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Start Date
+            </Label>
+            <Input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="endDate" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              End Date
+            </Label>
+            <Input
+              id="endDate"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Profit Metrics */}
+        {loading ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Loading profit data...
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Revenue</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {formatCurrency(profitData.totalRevenue)}
+                    </p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-primary opacity-50" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Cost</p>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {formatCurrency(profitData.totalCost)}
+                    </p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-orange-600 opacity-50" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Profit</p>
+                    <p className={`text-2xl font-bold ${profitData.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(profitData.totalProfit)}
+                    </p>
+                  </div>
+                  <TrendingUp className={`w-8 h-8 ${profitData.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'} opacity-50`} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Profit Margin</p>
+                    <p className={`text-2xl font-bold ${profitData.profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {profitData.profitPercentage.toFixed(2)}%
+                    </p>
+                  </div>
+                  <Percent className={`w-8 h-8 ${profitData.profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'} opacity-50`} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ProfitDashboard;

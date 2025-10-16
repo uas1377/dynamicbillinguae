@@ -10,6 +10,9 @@ const Template3 = ({ data }) => {
       <div className="bg-blue-500 text-white p-12">
         <div className="flex justify-between items-start mb-8">
           <div>
+            {yourCompany?.logo && (
+              <img src={yourCompany.logo} alt="Company Logo" className="h-14 object-contain mb-3 brightness-0 invert" />
+            )}
             <div className="text-white inline-block">
               <h1 className="text-2xl font-bold" id="company-name">
                 {yourCompany?.name || "Your Company Name"}

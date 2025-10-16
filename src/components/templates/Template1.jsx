@@ -9,6 +9,9 @@ const Template1 = ({ data }) => {
     <BaseTemplate data={data}>
       <div className="bg-white p-8 max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
+          {yourCompany?.logo && (
+            <img src={yourCompany.logo} alt="Company Logo" className="h-16 object-contain" />
+          )}
           <div className="text-right">
             <h2 className="text-3xl font-semibold">INVOICE</h2>
           </div>
@@ -16,9 +19,9 @@ const Template1 = ({ data }) => {
 
         <div className="flex justify-between mb-12">
           <div>
-            <h1 className="text-2xl font-bold">{yourCompany.name}</h1>
-            <p>{yourCompany.address}</p>
-            <p>{yourCompany.phone}</p>
+            <h1 className="text-2xl font-bold">{yourCompany?.name || 'Your Company'}</h1>
+            <p>{yourCompany?.address || ''}</p>
+            <p>{yourCompany?.phone || ''}</p>
           </div>
           <div>
             <p>Invoice Number: {invoice.number}</p>
