@@ -4,8 +4,8 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
   return new Promise((resolve, reject) => {
     try {
       // Create thermal receipt content
-      const businessSettings = JSON.parse(localStorage.getItem('businessSettings') || '{}');
-      const actualBusinessName = businessSettings.businessName || businessName;
+      const businessSettings = invoiceData.yourCompany || {};
+      const actualBusinessName = businessSettings.name || businessName;
       
       // Create a new window for printing
       const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -150,8 +150,8 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       printContent.style.padding = '10px';
       document.body.appendChild(printContent);
       
-      const businessSettings = JSON.parse(localStorage.getItem('businessSettings') || '{}');
-      const actualBusinessName = businessSettings.businessName || businessName;
+      const businessSettings = invoiceData.yourCompany || {};
+      const actualBusinessName = businessSettings.name || businessName;
       
       printContent.innerHTML = `
         <div style="
