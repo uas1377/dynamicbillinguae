@@ -26,87 +26,32 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   const [editMode, setEditMode] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('google_sheets_settings')
-        .select('*')
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading settings:', error);
-        toast.error('Failed to load settings');
-        return;
-      }
-
-      if (data) {
-        setApiKey(data.api_key || '');
-        setSpreadsheetId(data.spreadsheet_id || '');
-      }
-    } catch (error) {
-      console.error('Error loading settings:', error);
-    } finally {
-      setLoading(false);
-    }
+  const loadSettings = () => {
+    const savedApiKey = localStorage.getItem('googleSheetsApiKey') || '';
+    const savedSpreadsheetId = localStorage.getItem('googleSheetsSpreadsheetId') || '';
+    setApiKey(savedApiKey);
+    setSpreadsheetId(savedSpreadsheetId);
   };
 
-  const handleSaveSettings = async () => {
-    setSaving(true);
-    try {
-      const { data: existing } = await supabase
-        .from('google_sheets_settings')
-        .select('id')
-        .single();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('google_sheets_settings')
-          .update({ api_key: apiKey, spreadsheet_id: spreadsheetId, updated_at: new Date() })
-          .eq('id', existing.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('google_sheets_settings')
-          .insert({ api_key: apiKey, spreadsheet_id: spreadsheetId });
-
-        if (error) throw error;
-      }
-
-      toast.success('Settings saved successfully');
-      setEditMode(false);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      toast.error('Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveSettings = () => {
+    localStorage.setItem('googleSheetsApiKey', apiKey);
+    localStorage.setItem('googleSheetsSpreadsheetId', spreadsheetId);
+    toast.success('Settings saved successfully');
+    setEditMode(false);
   };
 
-  const handleClearSettings = async () => {
-    try {
-      const { error } = await supabase
-        .from('google_sheets_settings')
-        .update({ api_key: null, spreadsheet_id: null, updated_at: new Date() })
-        .eq('id', (await supabase.from('google_sheets_settings').select('id').single()).data.id);
-
-      if (error) throw error;
-
-      setApiKey('');
-      setSpreadsheetId('');
-      toast.success('Settings cleared successfully');
-      setEditMode(false);
-    } catch (error) {
-      console.error('Error clearing settings:', error);
-      toast.error('Failed to clear settings');
-    }
+  const handleClearSettings = () => {
+    localStorage.removeItem('googleSheetsApiKey');
+    localStorage.removeItem('googleSheetsSpreadsheetId');
+    setApiKey('');
+    setSpreadsheetId('');
+    toast.success('Settings cleared successfully');
+    setEditMode(false);
   };
 
   const handleClearAllProducts = async () => {
@@ -142,7 +87,10 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
       console.log('Starting manual sync...');
       
       const { data, error } = await supabase.functions.invoke('sync-products-sheets', {
-        body: {}
+        body: { 
+          apiKey: apiKey,
+          spreadsheetId: spreadsheetId 
+        }
       });
 
       if (error) {
@@ -183,13 +131,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {loading ? (
-          <div className="flex justify-center p-4">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-        ) : (
-          <>
-            {/* Settings Section */}
+        {/* Settings Section */}
             {editMode ? (
               <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
                 <div className="space-y-2">
@@ -212,8 +154,8 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleSaveSettings} disabled={saving} className="flex-1">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                  <Button onClick={handleSaveSettings} className="flex-1">
+                    <Save className="w-4 h-4 mr-2" />
                     Save
                   </Button>
                   <Button onClick={() => setEditMode(false)} variant="outline">
@@ -352,8 +294,6 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-          </>
-        )}
 
         <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
           <div className="flex items-start gap-2">

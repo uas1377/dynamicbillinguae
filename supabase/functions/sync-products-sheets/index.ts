@@ -16,27 +16,8 @@ serve(async (req) => {
   try {
     console.log('Starting Google Sheets product sync...');
     
-    // Initialize Supabase client first to get settings
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Fetch Google Sheets settings from database
-    const { data: settings, error: settingsError } = await supabase
-      .from('google_sheets_settings')
-      .select('*')
-      .single();
-
-    if (settingsError || !settings) {
-      console.error('Settings not found:', settingsError);
-      return new Response(JSON.stringify({ error: 'Google Sheets settings not configured' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const apiKey = settings.api_key;
-    const spreadsheetId = settings.spreadsheet_id;
+    // Get API key and spreadsheet ID from request body
+    const { apiKey, spreadsheetId } = await req.json();
     const range = 'A:F'; // Columns A to F (name, barcode, sku, quantity, price, buying_price)
     
     if (!apiKey) {
@@ -46,6 +27,11 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch data from Google Sheets
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
@@ -167,9 +153,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in sync-products-sheets function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
-      details: error.message 
+      details: errorMessage 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

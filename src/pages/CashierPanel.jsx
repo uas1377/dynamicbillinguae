@@ -46,22 +46,22 @@ const CashierPanel = () => {
         </Card>
 
         <Tabs defaultValue="add-product" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="add-product" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-2 gap-2 h-auto mb-6">
+            <TabsTrigger value="add-product" className="flex items-center gap-2 py-3">
               <Package className="w-4 h-4" />
-              Add Product
+              <span>Add Product</span>
             </TabsTrigger>
-            <TabsTrigger value="add-customer" className="flex items-center gap-2">
+            <TabsTrigger value="add-customer" className="flex items-center gap-2 py-3">
               <Users className="w-4 h-4" />
-              Add Customer
+              <span>Add Customer</span>
             </TabsTrigger>
-            <TabsTrigger value="create-invoice" className="flex items-center gap-2">
+            <TabsTrigger value="create-invoice" className="flex items-center gap-2 py-3">
               <FileText className="w-4 h-4" />
-              Create Invoice
+              <span>Create Invoice</span>
             </TabsTrigger>
-            <TabsTrigger value="all-invoices" className="flex items-center gap-2">
+            <TabsTrigger value="all-invoices" className="flex items-center gap-2 py-3">
               <List className="w-4 h-4" />
-              All Invoices
+              <span>All Invoices</span>
             </TabsTrigger>
           </TabsList>
 

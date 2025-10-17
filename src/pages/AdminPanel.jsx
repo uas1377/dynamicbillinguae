@@ -49,22 +49,22 @@ const AdminPanel = () => {
         </Card>
 
         <Tabs defaultValue="profit" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="profit" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-2 gap-2 h-auto mb-6">
+            <TabsTrigger value="profit" className="flex items-center gap-2 py-3">
               <TrendingUp className="w-4 h-4" />
-              Profit Analysis
+              <span>Profit Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2">
+            <TabsTrigger value="products" className="flex items-center gap-2 py-3">
               <Package className="w-4 h-4" />
-              Product Management
+              <span>Product Management</span>
             </TabsTrigger>
-            <TabsTrigger value="cashiers" className="flex items-center gap-2">
+            <TabsTrigger value="cashiers" className="flex items-center gap-2 py-3">
               <Users className="w-4 h-4" />
-              Cashier Management
+              <span>Cashier Management</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
+            <TabsTrigger value="settings" className="flex items-center gap-2 py-3">
               <Settings className="w-4 h-4" />
-              Admin Settings
+              <span>Admin Settings</span>
             </TabsTrigger>
           </TabsList>
 
