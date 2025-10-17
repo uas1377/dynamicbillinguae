@@ -16,9 +16,28 @@ serve(async (req) => {
   try {
     console.log('Starting Google Sheets product sync...');
     
-    const apiKey = Deno.env.get('GOOGLE_SHEETS_API_KEY');
-    const spreadsheetId = '1ykvSgP7LStA720MjpkKV54fl-fLk8Bbtskp_-huzdiA';
-    const range = 'A:E'; // Columns A to E (name, barcode, sku, quantity, price)
+    // Initialize Supabase client first to get settings
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch Google Sheets settings from database
+    const { data: settings, error: settingsError } = await supabase
+      .from('google_sheets_settings')
+      .select('*')
+      .single();
+
+    if (settingsError || !settings) {
+      console.error('Settings not found:', settingsError);
+      return new Response(JSON.stringify({ error: 'Google Sheets settings not configured' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const apiKey = settings.api_key;
+    const spreadsheetId = settings.spreadsheet_id;
+    const range = 'A:F'; // Columns A to F (name, barcode, sku, quantity, price, buying_price)
     
     if (!apiKey) {
       console.error('Google Sheets API key not found');
@@ -58,10 +77,6 @@ serve(async (req) => {
       });
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Process the sheets data (skip header row)
     const rows = sheetsData.values.slice(1);
@@ -80,6 +95,7 @@ serve(async (req) => {
         sku: row[2] ? row[2].trim() : null,
         quantity: row[3] ? parseInt(row[3]) || 0 : 0,
         price: row[4] ? parseFloat(row[4]) || 0 : 0,
+        buying_price: row[5] ? parseFloat(row[5]) || 0 : 0,
       };
 
       console.log('Processing product:', productData);

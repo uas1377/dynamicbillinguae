@@ -1,15 +1,140 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle, Settings, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const GoogleSheetsSync = ({ onSyncComplete }) => {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncStats, setSyncStats] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('google_sheets_settings')
+        .select('*')
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading settings:', error);
+        toast.error('Failed to load settings');
+        return;
+      }
+
+      if (data) {
+        setApiKey(data.api_key || '');
+        setSpreadsheetId(data.spreadsheet_id || '');
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from('google_sheets_settings')
+        .select('id')
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('google_sheets_settings')
+          .update({ api_key: apiKey, spreadsheet_id: spreadsheetId, updated_at: new Date() })
+          .eq('id', existing.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('google_sheets_settings')
+          .insert({ api_key: apiKey, spreadsheet_id: spreadsheetId });
+
+        if (error) throw error;
+      }
+
+      toast.success('Settings saved successfully');
+      setEditMode(false);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearSettings = async () => {
+    try {
+      const { error } = await supabase
+        .from('google_sheets_settings')
+        .update({ api_key: null, spreadsheet_id: null, updated_at: new Date() })
+        .eq('id', (await supabase.from('google_sheets_settings').select('id').single()).data.id);
+
+      if (error) throw error;
+
+      setApiKey('');
+      setSpreadsheetId('');
+      toast.success('Settings cleared successfully');
+      setEditMode(false);
+    } catch (error) {
+      console.error('Error clearing settings:', error);
+      toast.error('Failed to clear settings');
+    }
+  };
+
+  const handleClearAllProducts = async () => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+
+      toast.success('All products cleared successfully');
+      if (onSyncComplete) onSyncComplete();
+    } catch (error) {
+      console.error('Error clearing products:', error);
+      toast.error('Failed to clear products');
+    }
+  };
+
+  const handleClearBusinessDetails = async () => {
+    try {
+      localStorage.removeItem('businessSettings');
+      toast.success('Business details cleared successfully');
+    } catch (error) {
+      console.error('Error clearing business details:', error);
+      toast.error('Failed to clear business details');
+    }
+  };
 
   const handleSync = async () => {
     setSyncing(true);
@@ -58,26 +183,103 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="flex items-center gap-1">
-            <CheckCircle className="w-3 h-3 text-green-500" />
-            Connected
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            Spreadsheet ID: 1ykvSgP7...uzdiA
-          </span>
-        </div>
-        
-        <div className="text-sm text-muted-foreground">
-          <p className="mb-2">Column mapping:</p>
-          <ul className="space-y-1 text-xs">
-            <li>• Column A: Product Name</li>
-            <li>• Column B: Barcode</li>
-            <li>• Column C: SKU Number</li>
-            <li>• Column D: Quantity</li>
-            <li>• Column E: Price</li>
-          </ul>
-        </div>
+        {loading ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        ) : (
+          <>
+            {/* Settings Section */}
+            {editMode ? (
+              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey">Google Sheets API Key</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter API key"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="spreadsheetId">Spreadsheet ID</Label>
+                  <Input
+                    id="spreadsheetId"
+                    value={spreadsheetId}
+                    onChange={(e) => setSpreadsheetId(e.target.value)}
+                    placeholder="Enter spreadsheet ID"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveSettings} disabled={saving} className="flex-1">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save
+                  </Button>
+                  <Button onClick={() => setEditMode(false)} variant="outline">
+                    Cancel
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear Settings?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove your API key and spreadsheet ID. You'll need to re-enter them to sync.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearSettings}>Clear</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    {apiKey && spreadsheetId ? (
+                      <>
+                        <CheckCircle className="w-3 h-3 text-green-500" />
+                        Connected
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3 h-3 text-yellow-500" />
+                        Not Configured
+                      </>
+                    )}
+                  </Badge>
+                  {spreadsheetId && (
+                    <span className="text-sm text-muted-foreground">
+                      ID: {spreadsheetId.substring(0, 10)}...
+                    </span>
+                  )}
+                </div>
+                <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configure
+                </Button>
+              </div>
+            )}
+            
+            <div className="text-sm text-muted-foreground">
+              <p className="mb-2">Column mapping:</p>
+              <ul className="space-y-1 text-xs">
+                <li>• Column A: Product Name</li>
+                <li>• Column B: Barcode</li>
+                <li>• Column C: SKU Number</li>
+                <li>• Column D: Quantity</li>
+                <li>• Column E: Price (Selling)</li>
+                <li>• Column F: Buying Price (Cost)</li>
+              </ul>
+            </div>
 
         {lastSync && (
           <div className="text-sm">
@@ -90,10 +292,10 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button 
             onClick={handleSync} 
-            disabled={syncing}
+            disabled={syncing || !apiKey || !spreadsheetId}
             className="gradient-primary text-white border-0 flex items-center gap-2"
           >
             {syncing ? (
@@ -103,7 +305,55 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
             )}
             {syncing ? 'Syncing...' : 'Sync Now'}
           </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                Clear All Products
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear All Products?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all products from the database. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearAllProducts} className="bg-destructive text-destructive-foreground">
+                  Delete All
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                Clear Business Details
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear Business Details?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will remove your business name, address, phone, and logo from the system.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearBusinessDetails}>
+                  Clear
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
+          </>
+        )}
 
         <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
           <div className="flex items-start gap-2">
