@@ -50,8 +50,8 @@ const ProfitDashboard = () => {
         const items = invoice.items || [];
         
         for (const item of items) {
-          // Revenue is the final amount after discount (item.total)
-          totalRevenue += parseFloat(item.total || 0);
+          // Revenue is selling price * quantity
+          totalRevenue += parseFloat(item.amount || 0) * parseFloat(item.quantity || 0);
           
           // Cost is buying_price * quantity
           totalCost += parseFloat(item.buying_price || 0) * parseFloat(item.quantity || 0);
