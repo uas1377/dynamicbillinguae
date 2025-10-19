@@ -14,7 +14,8 @@ const AddProduct = () => {
     barcode: '',
     sku: '',
     quantity: '',
-    price: ''
+    price: '',
+    buyingPrice: ''
   });
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -59,7 +60,8 @@ const AddProduct = () => {
             barcode: product.barcode.trim() || null,
             sku: product.sku.trim() || null,
             quantity: parseInt(product.quantity) || 0,
-            price: parseFloat(product.price) || 0
+            price: parseFloat(product.price) || 0,
+            buying_price: parseFloat(product.buyingPrice) || 0
           })
           .eq('id', editingProduct.id);
 
@@ -79,7 +81,8 @@ const AddProduct = () => {
             barcode: product.barcode.trim() || null,
             sku: product.sku.trim() || null,
             quantity: parseInt(product.quantity) || 0,
-            price: parseFloat(product.price) || 0
+            price: parseFloat(product.price) || 0,
+            buying_price: parseFloat(product.buyingPrice) || 0
           });
 
         if (error) {
@@ -90,7 +93,7 @@ const AddProduct = () => {
         toast.success('Product added successfully');
       }
 
-      setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '' });
+      setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '' });
       loadProducts();
     } catch (error) {
       toast.error(`Failed to ${editingProduct ? 'update' : 'add'} product: ` + error.message);
@@ -103,13 +106,14 @@ const AddProduct = () => {
       barcode: productToEdit.barcode || '',
       sku: productToEdit.sku || '',
       quantity: productToEdit.quantity.toString(),
-      price: productToEdit.price.toString()
+      price: productToEdit.price.toString(),
+      buyingPrice: productToEdit.buying_price?.toString() || ''
     });
     setEditingProduct(productToEdit);
   };
 
   const handleCancelEdit = () => {
-    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '' });
+    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '' });
     setEditingProduct(null);
   };
 
@@ -192,13 +196,26 @@ const AddProduct = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="price">Price</Label>
+                <Label htmlFor="price">Selling Price</Label>
                 <Input
                   id="price"
                   type="number"
-                  placeholder="Enter price (optional)"
+                  placeholder="Enter selling price"
                   value={product.price}
                   onChange={(e) => setProduct({ ...product, price: e.target.value })}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="buyingPrice">Buying Price (Purchase Cost)</Label>
+                <Input
+                  id="buyingPrice"
+                  type="number"
+                  placeholder="Enter buying/purchase price"
+                  value={product.buyingPrice}
+                  onChange={(e) => setProduct({ ...product, buyingPrice: e.target.value })}
                   min="0"
                   step="0.01"
                 />
