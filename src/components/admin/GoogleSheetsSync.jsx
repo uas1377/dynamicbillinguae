@@ -104,10 +104,18 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
       setLastSync(new Date());
       setSyncStats(data);
       
-      if (data.synced > 0) {
-        toast.success(`Successfully synced ${data.synced} products from Google Sheets`);
+      const messages = [];
+      if (data.quantitiesUpdated > 0) {
+        messages.push(`${data.quantitiesUpdated} quantities updated in sheets`);
+      }
+      if (data.newProductsFromSheets > 0) {
+        messages.push(`${data.newProductsFromSheets} new products added from sheets`);
+      }
+      
+      if (messages.length > 0) {
+        toast.success(`Sync complete: ${messages.join(', ')}`);
       } else {
-        toast.info('No new products to sync');
+        toast.info('No changes to sync');
       }
       
       // Notify parent component to refresh products
@@ -227,9 +235,14 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
           <div className="text-sm">
             <p className="text-muted-foreground">Last sync: {lastSync.toLocaleString()}</p>
             {syncStats && (
-              <p className="text-green-600">
-                {syncStats.synced} products synced
-              </p>
+              <div className="text-green-600 space-y-1">
+                {syncStats.quantitiesUpdated > 0 && (
+                  <p>• {syncStats.quantitiesUpdated} quantities updated in sheets</p>
+                )}
+                {syncStats.newProductsFromSheets > 0 && (
+                  <p>• {syncStats.newProductsFromSheets} new products from sheets</p>
+                )}
+              </div>
             )}
           </div>
         )}

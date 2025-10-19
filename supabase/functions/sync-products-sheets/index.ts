@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting Google Sheets product sync...');
+    console.log('Starting bi-directional Google Sheets product sync...');
     
     // Get API key and spreadsheet ID from request body
     const { apiKey, spreadsheetId } = await req.json();
@@ -32,6 +32,22 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch all products from database
+    console.log('Fetching products from database...');
+    const { data: dbProducts, error: dbError } = await supabase
+      .from('products')
+      .select('*');
+
+    if (dbError) {
+      console.error('Error fetching products from database:', dbError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch products from database' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Found ${dbProducts?.length || 0} products in database`);
 
     // Fetch data from Google Sheets
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
@@ -63,12 +79,68 @@ serve(async (req) => {
       });
     }
 
-
-    // Process the sheets data (skip header row)
+    // Prepare updated rows for Google Sheets
+    const updatedRows = [sheetsData.values[0]]; // Keep header row
+    const sheetProductMap = new Map();
+    
+    // Map existing sheet products by name/SKU
     const rows = sheetsData.values.slice(1);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] && row[0].trim()) {
+        const key = row[2] ? row[2].trim() : row[0].trim(); // Use SKU or name as key
+        sheetProductMap.set(key, { row, index: i + 2 }); // +2 because of header and 1-based indexing
+      }
+    }
+
     const syncedProducts = [];
     let syncCount = 0;
+    let quantityUpdates = 0;
+    let newFromSheets = 0;
 
+    // Step 1: Update quantities in sheets from database
+    console.log('Step 1: Updating quantities in Google Sheets from database...');
+    for (const dbProduct of dbProducts || []) {
+      const key = dbProduct.sku || dbProduct.name;
+      const sheetProduct = sheetProductMap.get(key);
+      
+      if (sheetProduct) {
+        // Update quantity in sheet from database
+        const updatedRow = [...sheetProduct.row];
+        updatedRow[3] = dbProduct.quantity.toString(); // Update quantity column
+        updatedRows.push(updatedRow);
+        sheetProductMap.delete(key); // Mark as processed
+        quantityUpdates++;
+        console.log(`Updated quantity for ${dbProduct.name} to ${dbProduct.quantity}`);
+      }
+    }
+
+    // Add remaining sheet products that weren't in database (will be synced to DB)
+    for (const [key, value] of sheetProductMap) {
+      updatedRows.push(value.row);
+    }
+
+    // Step 2: Write updated data back to Google Sheets
+    console.log('Step 2: Writing updated quantities back to Google Sheets...');
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW&key=${apiKey}`;
+    const updateResponse = await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        values: updatedRows
+      })
+    });
+
+    if (!updateResponse.ok) {
+      console.error('Failed to update Google Sheets:', updateResponse.status);
+    } else {
+      console.log(`Successfully updated ${quantityUpdates} quantities in Google Sheets`);
+    }
+
+    // Step 3: Sync new products from sheets to database
+    console.log('Step 3: Syncing new products from Google Sheets to database...');
     for (const row of rows) {
       // Skip rows that don't have at least a product name
       if (!row[0] || !row[0].trim()) {
@@ -84,68 +156,50 @@ serve(async (req) => {
         buying_price: row[5] ? parseFloat(row[5]) || 0 : 0,
       };
 
-      console.log('Processing product:', productData);
+      // Check if product exists in database
+      let existingProduct = null;
+      
+      if (productData.sku) {
+        const { data: skuProduct } = await supabase
+          .from('products')
+          .select('*')
+          .eq('sku', productData.sku)
+          .maybeSingle();
+        existingProduct = skuProduct;
+      }
+      
+      if (!existingProduct) {
+        const { data: nameProduct } = await supabase
+          .from('products')
+          .select('*')
+          .eq('name', productData.name)
+          .maybeSingle();
+        existingProduct = nameProduct;
+      }
 
-      try {
-        // Check if product exists by name or SKU
-        let existingProduct = null;
-        
-        if (productData.sku) {
-          const { data: skuProduct } = await supabase
-            .from('products')
-            .select('*')
-            .eq('sku', productData.sku)
-            .single();
-          existingProduct = skuProduct;
-        }
-        
-        if (!existingProduct) {
-          const { data: nameProduct } = await supabase
-            .from('products')
-            .select('*')
-            .eq('name', productData.name)
-            .single();
-          existingProduct = nameProduct;
-        }
+      if (!existingProduct) {
+        // Insert new product from sheet
+        const { error } = await supabase
+          .from('products')
+          .insert(productData);
 
-        if (existingProduct) {
-          // Update existing product
-          const { error } = await supabase
-            .from('products')
-            .update(productData)
-            .eq('id', existingProduct.id);
-
-          if (error) {
-            console.error('Error updating product:', error);
-          } else {
-            console.log('Updated product:', productData.name);
-            syncCount++;
-            syncedProducts.push({ ...productData, action: 'updated' });
-          }
+        if (error) {
+          console.error('Error inserting product:', error);
         } else {
-          // Insert new product
-          const { error } = await supabase
-            .from('products')
-            .insert(productData);
-
-          if (error) {
-            console.error('Error inserting product:', error);
-          } else {
-            console.log('Inserted new product:', productData.name);
-            syncCount++;
-            syncedProducts.push({ ...productData, action: 'created' });
-          }
+          console.log('Inserted new product from sheet:', productData.name);
+          syncCount++;
+          newFromSheets++;
+          syncedProducts.push({ ...productData, action: 'created_from_sheet' });
         }
-      } catch (productError) {
-        console.error('Error processing product:', productData.name, productError);
       }
     }
 
-    console.log(`Sync completed. ${syncCount} products processed.`);
+    console.log(`Sync completed. ${quantityUpdates} quantities updated in sheets, ${newFromSheets} new products from sheets.`);
     
     return new Response(JSON.stringify({ 
-      message: 'Products synced successfully',
-      synced: syncCount,
+      message: 'Bi-directional sync completed successfully',
+      quantitiesUpdated: quantityUpdates,
+      newProductsFromSheets: newFromSheets,
       products: syncedProducts
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
