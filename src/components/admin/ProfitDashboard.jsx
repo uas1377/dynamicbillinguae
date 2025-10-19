@@ -13,6 +13,8 @@ const ProfitDashboard = () => {
   const [showAllTime, setShowAllTime] = useState(false);
   const [startDate, setStartDate] = useState(format(new Date(new Date().setDate(1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [additionalCosts, setAdditionalCosts] = useState(0);
+  const [extraProfit, setExtraProfit] = useState(0);
   const [profitData, setProfitData] = useState({
     totalRevenue: 0,
     totalCost: 0,
@@ -23,7 +25,7 @@ const ProfitDashboard = () => {
 
   useEffect(() => {
     loadProfitData();
-  }, [startDate, endDate, showAllTime]);
+  }, [startDate, endDate, showAllTime, additionalCosts, extraProfit]);
 
   const loadProfitData = async () => {
     setLoading(true);
@@ -56,13 +58,14 @@ const ProfitDashboard = () => {
         }
       }
 
-      const totalProfit = totalRevenue - totalCost;
-      const profitPercentage = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+      const baseProfit = totalRevenue - totalCost;
+      const adjustedProfit = baseProfit - parseFloat(additionalCosts || 0) + parseFloat(extraProfit || 0);
+      const profitPercentage = totalRevenue > 0 ? (adjustedProfit / totalRevenue) * 100 : 0;
 
       setProfitData({
         totalRevenue,
-        totalCost,
-        totalProfit,
+        totalCost: totalCost + parseFloat(additionalCosts || 0),
+        totalProfit: adjustedProfit,
         profitPercentage
       });
     } catch (error) {
@@ -123,6 +126,36 @@ const ProfitDashboard = () => {
           </div>
         </div>
         )}
+
+        {/* Profit Adjustments */}
+        <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="space-y-2">
+            <Label htmlFor="additionalCosts">Additional Costs (₹)</Label>
+            <Input
+              id="additionalCosts"
+              type="number"
+              placeholder="Enter additional costs"
+              value={additionalCosts}
+              onChange={(e) => setAdditionalCosts(e.target.value)}
+              min="0"
+              step="0.01"
+            />
+            <p className="text-xs text-muted-foreground">Costs to deduct from profit (e.g., rent, utilities)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="extraProfit">Extra Profit (₹)</Label>
+            <Input
+              id="extraProfit"
+              type="number"
+              placeholder="Enter extra profit"
+              value={extraProfit}
+              onChange={(e) => setExtraProfit(e.target.value)}
+              min="0"
+              step="0.01"
+            />
+            <p className="text-xs text-muted-foreground">Additional income to add (e.g., services, tips)</p>
+          </div>
+        </div>
 
         {/* Profit Metrics */}
         {loading ? (

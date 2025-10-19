@@ -17,6 +17,7 @@ const CreateInvoice = () => {
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [taxRate, setTaxRate] = useState(0);
@@ -306,8 +307,20 @@ const CreateInvoice = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <Input
+              placeholder="Search products by name or SKU..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto">
-            {products.map((product) => (
+            {products
+              .filter(product => 
+                product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                (product.sku && product.sku.toLowerCase().includes(productSearch.toLowerCase()))
+              )
+              .map((product) => (
               <Card 
                 key={product.id} 
                 className="cursor-pointer hover:shadow-md transition-shadow border"
