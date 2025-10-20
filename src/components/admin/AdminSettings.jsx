@@ -3,9 +3,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save, Building2, Upload } from "lucide-react";
+import { Settings, Save, Building2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const AdminSettings = () => {
   const [adminCredentials, setAdminCredentials] = useState({
@@ -186,6 +197,34 @@ const AdminSettings = () => {
       toast.success('Business settings updated successfully');
     } catch (error) {
       toast.error('Failed to update business settings: ' + error.message);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    try {
+      // Delete all products
+      await supabase.from('products').delete().neq('id', 0);
+
+      // Delete all invoices
+      await supabase.from('invoices').delete().neq('id', 0);
+
+      // Delete all customers
+      await supabase.from('customers').delete().neq('id', 0);
+
+      // Delete business settings
+      await supabase
+        .from('admin_settings')
+        .update({ setting_value: {} })
+        .eq('setting_key', 'business_settings');
+
+      // Clear localStorage
+      localStorage.clear();
+      
+      toast.success('All data cleared successfully');
+      loadSettings();
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      toast.error('Failed to clear all data');
     }
   };
 
@@ -405,6 +444,29 @@ const AdminSettings = () => {
             >
               Export Data
             </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear All Data
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all products, invoices, customers, and business settings. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearAllData}>
+                    Delete Everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             
             <p className="text-sm text-muted-foreground">
               Export all system data for backup purposes. This includes products, customers, invoices, and cashier accounts.
