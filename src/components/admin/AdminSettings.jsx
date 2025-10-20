@@ -202,41 +202,49 @@ const AdminSettings = () => {
 
   const handleClearAllData = async () => {
     try {
-      // Delete all invoices
-      const { error: invoicesError } = await supabase
+      console.log('Starting data deletion...');
+      
+      // Delete all invoices first (they reference customers via foreign key)
+      const { data: invoices, error: invoicesError } = await supabase
         .from('invoices')
         .delete()
-        .gte('id', 0);
+        .not('id', 'is', null)
+        .select();
       
       if (invoicesError) {
         console.error('Error deleting invoices:', invoicesError);
         toast.error('Failed to delete invoices: ' + invoicesError.message);
         return;
       }
-
-      // Delete all products
-      const { error: productsError } = await supabase
-        .from('products')
-        .delete()
-        .gte('id', 0);
-      
-      if (productsError) {
-        console.error('Error deleting products:', productsError);
-        toast.error('Failed to delete products: ' + productsError.message);
-        return;
-      }
+      console.log(`Deleted ${invoices?.length || 0} invoices`);
 
       // Delete all customers
-      const { error: customersError } = await supabase
+      const { data: customers, error: customersError } = await supabase
         .from('customers')
         .delete()
-        .gte('id', 0);
+        .not('id', 'is', null)
+        .select();
       
       if (customersError) {
         console.error('Error deleting customers:', customersError);
         toast.error('Failed to delete customers: ' + customersError.message);
         return;
       }
+      console.log(`Deleted ${customers?.length || 0} customers`);
+
+      // Delete all products
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .delete()
+        .not('id', 'is', null)
+        .select();
+      
+      if (productsError) {
+        console.error('Error deleting products:', productsError);
+        toast.error('Failed to delete products: ' + productsError.message);
+        return;
+      }
+      console.log(`Deleted ${products?.length || 0} products`);
 
       // Clear business settings
       const { error: businessError } = await supabase
@@ -250,13 +258,15 @@ const AdminSettings = () => {
 
       // Clear localStorage
       localStorage.clear();
+      sessionStorage.clear();
       
-      toast.success('All data cleared successfully from database');
+      console.log('All data cleared successfully');
+      toast.success('All data cleared successfully from database!');
       
-      // Reload settings and page
+      // Reload page after short delay
       setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+        window.location.href = '/';
+      }, 1500);
     } catch (error) {
       console.error('Error clearing data:', error);
       toast.error('Failed to clear all data: ' + error.message);
