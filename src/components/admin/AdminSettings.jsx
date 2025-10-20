@@ -202,29 +202,64 @@ const AdminSettings = () => {
 
   const handleClearAllData = async () => {
     try {
-      // Delete all products
-      await supabase.from('products').delete().neq('id', 0);
-
       // Delete all invoices
-      await supabase.from('invoices').delete().neq('id', 0);
+      const { error: invoicesError } = await supabase
+        .from('invoices')
+        .delete()
+        .gte('id', 0);
+      
+      if (invoicesError) {
+        console.error('Error deleting invoices:', invoicesError);
+        toast.error('Failed to delete invoices: ' + invoicesError.message);
+        return;
+      }
+
+      // Delete all products
+      const { error: productsError } = await supabase
+        .from('products')
+        .delete()
+        .gte('id', 0);
+      
+      if (productsError) {
+        console.error('Error deleting products:', productsError);
+        toast.error('Failed to delete products: ' + productsError.message);
+        return;
+      }
 
       // Delete all customers
-      await supabase.from('customers').delete().neq('id', 0);
+      const { error: customersError } = await supabase
+        .from('customers')
+        .delete()
+        .gte('id', 0);
+      
+      if (customersError) {
+        console.error('Error deleting customers:', customersError);
+        toast.error('Failed to delete customers: ' + customersError.message);
+        return;
+      }
 
-      // Delete business settings
-      await supabase
+      // Clear business settings
+      const { error: businessError } = await supabase
         .from('admin_settings')
         .update({ setting_value: {} })
         .eq('setting_key', 'business_settings');
+      
+      if (businessError) {
+        console.error('Error clearing business settings:', businessError);
+      }
 
       // Clear localStorage
       localStorage.clear();
       
-      toast.success('All data cleared successfully');
-      loadSettings();
+      toast.success('All data cleared successfully from database');
+      
+      // Reload settings and page
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error) {
       console.error('Error clearing data:', error);
-      toast.error('Failed to clear all data');
+      toast.error('Failed to clear all data: ' + error.message);
     }
   };
 
