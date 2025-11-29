@@ -1,11 +1,11 @@
 {
   "name": "Galaxy Billing App",
-  "short_name": "Galaxy Billing App",
-  "description": "Complete billing and invoice management system with multi-role access",
+  "short_name": "Galaxy Billing",
+  "description": "Offline-capable billing and invoice management system",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
+  "background_color": "#1a1a2e",
+  "theme_color": "#6366f1",
   "orientation": "portrait-primary",
   "icons": [
     {
