@@ -19,7 +19,8 @@ const AllInvoices = () => {
   const [filters, setFilters] = useState({
     status: 'all',
     customer: 'all',
-    search: ''
+    search: '',
+    month: 'all'
   });
 
   useEffect(() => {
@@ -79,6 +80,16 @@ const AllInvoices = () => {
     if (filters.customer !== 'all') {
       filtered = filtered.filter(invoice => invoice.customer_phone === filters.customer);
     }
+    
+    // Filter by month
+    if (filters.month !== 'all') {
+      filtered = filtered.filter(invoice => {
+        const invoiceDate = new Date(invoice.created_at);
+        const [year, month] = filters.month.split('-');
+        return invoiceDate.getFullYear() === parseInt(year) && 
+               invoiceDate.getMonth() === parseInt(month) - 1;
+      });
+    }
 
     // Filter by search
     if (filters.search) {
@@ -91,6 +102,68 @@ const AllInvoices = () => {
     }
 
     setFilteredInvoices(filtered);
+  };
+  
+  const exportToCSV = () => {
+    if (filteredInvoices.length === 0) {
+      toast.error('No invoices to export');
+      return;
+    }
+
+    // Create CSV header
+    const headers = ['Invoice Number', 'Date', 'Customer Name', 'Customer Phone', 'Status', 'Items', 'Total Amount'];
+    
+    // Create CSV rows
+    const rows = filteredInvoices.map(invoice => {
+      const date = new Date(invoice.created_at).toLocaleDateString();
+      const items = invoice.items.map(item => `${item.name} (${item.quantity})`).join('; ');
+      return [
+        invoice.invoice_number,
+        date,
+        invoice.customer_name || 'N/A',
+        invoice.customer_phone || 'N/A',
+        invoice.status,
+        items,
+        invoice.total_amount
+      ];
+    });
+
+    // Combine headers and rows
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const monthLabel = filters.month !== 'all' ? `_${filters.month}` : '';
+    link.download = `invoices${monthLabel}_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    toast.success('CSV exported successfully');
+  };
+  
+  const getMonthOptions = () => {
+    const months = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      months.push({
+        value: `${year}-${month}`,
+        label: date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+      });
+    }
+    return months;
   };
 
   const toggleInvoiceStatus = async (invoiceId, currentStatus) => {
@@ -171,7 +244,7 @@ const AllInvoices = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4 mb-4">
             <div className="space-y-2">
               <Label htmlFor="status-filter">Status</Label>
               <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
@@ -202,6 +275,23 @@ const AllInvoices = () => {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="month-filter">Month</Label>
+              <Select value={filters.month} onValueChange={(value) => setFilters({ ...filters, month: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by month" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Months</SelectItem>
+                  {getMonthOptions().map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="search">Search</Label>
@@ -216,6 +306,17 @@ const AllInvoices = () => {
                 />
               </div>
             </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button 
+              onClick={exportToCSV} 
+              variant="outline" 
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export to CSV
+            </Button>
           </div>
         </CardContent>
       </Card>

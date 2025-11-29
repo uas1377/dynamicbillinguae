@@ -24,6 +24,7 @@ const CreateInvoice = () => {
   const [invoiceStatus, setInvoiceStatus] = useState('unpaid');
   const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percentage'
   const [discountValue, setDiscountValue] = useState(0);
+  const [barcodeBuffer, setBarcodeBuffer] = useState('');
   const [businessSettings, setBusinessSettings] = useState({
     name: '',
     address: '',
@@ -35,6 +36,39 @@ const CreateInvoice = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Barcode scanner listener
+  useEffect(() => {
+    let timeout;
+    const handleKeyPress = (e) => {
+      // Ignore if user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      clearTimeout(timeout);
+      
+      if (e.key === 'Enter' && barcodeBuffer.length > 0) {
+        // Process barcode
+        const product = products.find(p => p.barcode === barcodeBuffer.trim());
+        if (product) {
+          addProductToInvoice(product);
+          toast.success(`Product added: ${product.name}`);
+        } else {
+          toast.error('Product not found with barcode: ' + barcodeBuffer);
+        }
+        setBarcodeBuffer('');
+      } else if (e.key.length === 1) {
+        // Build barcode buffer
+        setBarcodeBuffer(prev => prev + e.key);
+        timeout = setTimeout(() => setBarcodeBuffer(''), 100);
+      }
+    };
+
+    window.addEventListener('keypress', handleKeyPress);
+    return () => {
+      window.removeEventListener('keypress', handleKeyPress);
+      clearTimeout(timeout);
+    };
+  }, [barcodeBuffer, products]);
 
   const loadData = async () => {
     try {

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, ShoppingCart, Shield, Phone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -52,6 +53,21 @@ const RoleSelection = () => {
 
           if (error || !cashiers) {
             toast.error('Invalid cashier credentials');
+            return;
+          }
+          
+          // Check for default panel setting for cashier
+          const { data: businessSettings } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'business_settings')
+            .single();
+            
+          if (businessSettings?.setting_value?.defaultPanel === 'cashier') {
+            sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
+            navigate('/cashier');
+            setLoginModal(null);
+            setCredentials({ username: '', password: '', phone: '' });
             return;
           }
         }

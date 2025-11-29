@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, Save, Building2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,7 +32,8 @@ const AdminSettings = () => {
     address: '',
     phone: '',
     email: '',
-    logo: ''
+    logo: '',
+    defaultPanel: 'role-selection' // 'role-selection' or 'cashier'
   });
 
   const [logoFile, setLogoFile] = useState(null);
@@ -71,7 +73,8 @@ const AdminSettings = () => {
           address: settings.business_settings.address || '',
           phone: settings.business_settings.phone || '',
           email: settings.business_settings.email || '',
-          logo: settings.business_settings.logo || ''
+          logo: settings.business_settings.logo || '',
+          defaultPanel: settings.business_settings.defaultPanel || 'role-selection'
         });
       }
     } catch (error) {
@@ -179,7 +182,8 @@ const AdminSettings = () => {
         address: businessSettings.address,
         phone: businessSettings.phone,
         email: businessSettings.email,
-        logo: logoUrl
+        logo: logoUrl,
+        defaultPanel: businessSettings.defaultPanel
       };
 
       const { error } = await supabase
@@ -353,6 +357,25 @@ const AdminSettings = () => {
               </div>
               <p className="text-xs text-muted-foreground">
                 Upload your business logo (recommended size: 200x200px)
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="defaultPanel">Default Landing Panel</Label>
+              <Select 
+                value={businessSettings.defaultPanel} 
+                onValueChange={(value) => setBusinessSettings({ ...businessSettings, defaultPanel: value })}
+              >
+                <SelectTrigger id="defaultPanel">
+                  <SelectValue placeholder="Select default panel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="role-selection">Role Selection (Default)</SelectItem>
+                  <SelectItem value="cashier">Cashier Panel</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Set which panel opens by default after login
               </p>
             </div>
             
