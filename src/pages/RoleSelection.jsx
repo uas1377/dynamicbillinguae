@@ -13,7 +13,24 @@ import { supabase } from "@/integrations/supabase/client";
 const RoleSelection = () => {
   const [loginModal, setLoginModal] = useState(null);
   const [credentials, setCredentials] = useState({ username: '', password: '', phone: '' });
+  const [defaultPanel, setDefaultPanel] = useState(null);
   const navigate = useNavigate();
+
+  // Check default panel setting on mount
+  React.useEffect(() => {
+    const checkDefaultPanel = async () => {
+      const { data: businessSettings } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'business_settings')
+        .single();
+        
+      if (businessSettings?.setting_value?.defaultPanel) {
+        setDefaultPanel(businessSettings.setting_value.defaultPanel);
+      }
+    };
+    checkDefaultPanel();
+  }, []);
 
   const handleLogin = async (role) => {
     if (role === 'customer') {
@@ -84,6 +101,12 @@ const RoleSelection = () => {
   };
 
   const openModal = (role) => {
+    // If cashier is default panel, skip login
+    if (role === 'cashier' && defaultPanel === 'cashier') {
+      sessionStorage.setItem('currentUser', JSON.stringify({ role: 'cashier', username: 'default-cashier' }));
+      navigate('/cashier');
+      return;
+    }
     setLoginModal(role);
     setCredentials({ username: '', password: '', phone: '' });
   };
