@@ -28,6 +28,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   const [spreadsheetId, setSpreadsheetId] = useState('');
   const [autoSync, setAutoSync] = useState(false);
   const [syncInterval, setSyncInterval] = useState(30);
+  const [syncingToSheet, setSyncingToSheet] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -119,9 +120,9 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      console.log('Starting manual sync...');
+      console.log('Starting manual sync (Sheet → App)...');
       
-      const { data, error } = await supabase.functions.invoke('sync-products-sheets', {
+      const { data, error } = await supabase.functions.invoke('poll-sheets-for-changes', {
         body: { 
           apiKey: apiKey,
           spreadsheetId: spreadsheetId 
@@ -130,38 +131,60 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
 
       if (error) {
         console.error('Sync error:', error);
-        toast.error('Failed to sync products: ' + error.message);
+        toast.error('Failed to sync: ' + error.message);
         return;
       }
 
       console.log('Sync response:', data);
-      
       setLastSync(new Date());
-      setSyncStats(data);
       
-      const messages = [];
-      if (data.quantitiesUpdated > 0) {
-        messages.push(`${data.quantitiesUpdated} quantities updated in sheets`);
-      }
-      if (data.newProductsFromSheets > 0) {
-        messages.push(`${data.newProductsFromSheets} new products added from sheets`);
-      }
-      
-      if (messages.length > 0) {
-        toast.success(`Sync complete: ${messages.join(', ')}`);
+      if (data.changes > 0) {
+        toast.success(`Synced ${data.changes} products from sheet to app`);
       } else {
         toast.info('No changes to sync');
       }
       
-      // Notify parent component to refresh products
       if (onSyncComplete) {
         onSyncComplete();
       }
     } catch (error) {
       console.error('Error during sync:', error);
-      toast.error('Failed to sync products: ' + error.message);
+      toast.error('Failed to sync: ' + error.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncToSheet = async () => {
+    setSyncingToSheet(true);
+    try {
+      console.log('Starting sync (App → Sheet quantities)...');
+      
+      const { data, error } = await supabase.functions.invoke('sync-app-to-sheets', {
+        body: { 
+          apiKey: apiKey,
+          spreadsheetId: spreadsheetId 
+        }
+      });
+
+      if (error) {
+        console.error('Sync error:', error);
+        toast.error('Failed to sync: ' + error.message);
+        return;
+      }
+
+      console.log('Sync response:', data);
+      
+      if (data.quantitiesUpdated > 0) {
+        toast.success(`Updated ${data.quantitiesUpdated} quantities in sheet`);
+      } else {
+        toast.info('All quantities are up to date');
+      }
+    } catch (error) {
+      console.error('Error during sync:', error);
+      toast.error('Failed to sync: ' + error.message);
+    } finally {
+      setSyncingToSheet(false);
     }
   };
 
@@ -339,7 +362,21 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            {syncing ? 'Syncing...' : 'Sync Now'}
+            {syncing ? 'Syncing...' : 'Sync from Sheet'}
+          </Button>
+
+          <Button 
+            onClick={handleSyncToSheet} 
+            disabled={syncingToSheet || !apiKey || !spreadsheetId}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {syncingToSheet ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            {syncingToSheet ? 'Syncing...' : 'Sync to Sheet'}
           </Button>
 
           <AlertDialog>
