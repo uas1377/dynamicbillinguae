@@ -156,25 +156,44 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   };
 
   const handleSyncToSheet = async () => {
+    if (!apiKey || !spreadsheetId) {
+      toast.error('Please configure API key and Spreadsheet ID first');
+      return;
+    }
+
     setSyncingToSheet(true);
     try {
       console.log('Starting sync (App → Sheet quantities)...');
+      console.log('API Key present:', !!apiKey);
+      console.log('Spreadsheet ID:', spreadsheetId);
       
       const { data, error } = await supabase.functions.invoke('sync-app-to-sheets', {
         body: { 
-          apiKey: apiKey,
-          spreadsheetId: spreadsheetId 
+          apiKey,
+          spreadsheetId 
         }
       });
 
+      console.log('Invoke response:', { data, error });
+
       if (error) {
         console.error('Sync error:', error);
-        toast.error('Failed to sync: ' + error.message);
+        toast.error(`Failed to sync: ${error.message || JSON.stringify(error)}`);
+        return;
+      }
+
+      if (!data) {
+        toast.error('No response from sync function');
         return;
       }
 
       console.log('Sync response:', data);
       
+      if (data.error) {
+        toast.error(`Sync failed: ${data.error}`);
+        return;
+      }
+
       if (data.quantitiesUpdated > 0) {
         toast.success(`Updated ${data.quantitiesUpdated} quantities in sheet`);
       } else {
@@ -182,7 +201,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
       }
     } catch (error) {
       console.error('Error during sync:', error);
-      toast.error('Failed to sync: ' + error.message);
+      toast.error(`Failed to sync: ${error.message || 'Unknown error'}`);
     } finally {
       setSyncingToSheet(false);
     }
