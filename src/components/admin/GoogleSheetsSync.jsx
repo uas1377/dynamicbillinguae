@@ -26,21 +26,56 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   const [editMode, setEditMode] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [autoSync, setAutoSync] = useState(false);
+  const [syncInterval, setSyncInterval] = useState(30);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
+  // Auto-sync polling
+  useEffect(() => {
+    if (!autoSync || !apiKey || !spreadsheetId) return;
+
+    const pollSheets = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('poll-sheets-for-changes', {
+          body: { apiKey, spreadsheetId }
+        });
+
+        if (error) throw error;
+        
+        if (data.changes > 0) {
+          console.log(`Auto-sync: ${data.changes} changes from sheets`);
+        }
+      } catch (error) {
+        console.error('Auto-sync error:', error);
+      }
+    };
+
+    const intervalId = setInterval(pollSheets, syncInterval * 1000);
+    pollSheets(); // Run immediately
+
+    return () => clearInterval(intervalId);
+  }, [autoSync, apiKey, spreadsheetId, syncInterval]);
+
   const loadSettings = () => {
     const savedApiKey = localStorage.getItem('googleSheetsApiKey') || '';
     const savedSpreadsheetId = localStorage.getItem('googleSheetsSpreadsheetId') || '';
+    const savedAutoSync = localStorage.getItem('googleSheetsAutoSync');
+    const savedSyncInterval = localStorage.getItem('googleSheetsSyncInterval');
+    
     setApiKey(savedApiKey);
     setSpreadsheetId(savedSpreadsheetId);
+    if (savedAutoSync) setAutoSync(savedAutoSync === 'true');
+    if (savedSyncInterval) setSyncInterval(parseInt(savedSyncInterval));
   };
 
   const handleSaveSettings = () => {
     localStorage.setItem('googleSheetsApiKey', apiKey);
     localStorage.setItem('googleSheetsSpreadsheetId', spreadsheetId);
+    localStorage.setItem('googleSheetsAutoSync', autoSync.toString());
+    localStorage.setItem('googleSheetsSyncInterval', syncInterval.toString());
     toast.success('Settings saved successfully');
     setEditMode(false);
   };
@@ -161,6 +196,43 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
                     placeholder="Enter spreadsheet ID"
                   />
                 </div>
+                
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Auto-Sync</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Automatically sync changes from Google Sheets
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={autoSync}
+                      onChange={(e) => setAutoSync(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                  </div>
+                  
+                  {autoSync && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">
+                        Sync Interval (seconds)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="10"
+                        max="300"
+                        value={syncInterval}
+                        onChange={(e) => setSyncInterval(parseInt(e.target.value) || 30)}
+                        placeholder="30"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        How often to check for changes (10-300 seconds)
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-2">
                   <Button onClick={handleSaveSettings} className="flex-1">
                     <Save className="w-4 h-4 mr-2" />
@@ -191,31 +263,40 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    {apiKey && spreadsheetId ? (
-                      <>
-                        <CheckCircle className="w-3 h-3 text-green-500" />
-                        Connected
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-3 h-3 text-yellow-500" />
-                        Not Configured
-                      </>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      {apiKey && spreadsheetId ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-green-500" />
+                          Connected
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3 text-yellow-500" />
+                          Not Configured
+                        </>
+                      )}
+                    </Badge>
+                    {spreadsheetId && (
+                      <span className="text-sm text-muted-foreground">
+                        ID: {spreadsheetId.substring(0, 10)}...
+                      </span>
                     )}
-                  </Badge>
-                  {spreadsheetId && (
-                    <span className="text-sm text-muted-foreground">
-                      ID: {spreadsheetId.substring(0, 10)}...
-                    </span>
-                  )}
+                  </div>
+                  <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configure
+                  </Button>
                 </div>
-                <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Configure
-                </Button>
+
+                {autoSync && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    Auto-sync enabled (every {syncInterval}s)
+                  </div>
+                )}
               </div>
             )}
             
@@ -311,10 +392,15 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-blue-700 dark:text-blue-300">
-              <strong>Note:</strong> Changes in Google Sheets will sync to this app. 
-              Products with matching names or SKU numbers will be updated. 
-              New products will be added automatically.
+            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-2">
+              <div>
+                <strong>Real-time Sync:</strong> Products automatically sync between app and Google Sheets.
+              </div>
+              <ul className="space-y-1 list-disc list-inside ml-2">
+                <li><strong>App → Sheets:</strong> Products added/updated/sold sync instantly</li>
+                <li><strong>Sheets → App:</strong> Enable auto-sync to poll for changes</li>
+                <li>Quantities update automatically when products are sold</li>
+              </ul>
             </div>
           </div>
         </div>

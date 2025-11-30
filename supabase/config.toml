@@ -2,3 +2,9 @@ project_id = "yidujufgbevuzwzodjln"
 
 [functions.sync-products-sheets]
 verify_jwt = false
+
+[functions.update-sheets-on-product-change]
+verify_jwt = false
+
+[functions.poll-sheets-for-changes]
+verify_jwt = false
