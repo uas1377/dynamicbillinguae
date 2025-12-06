@@ -1,5 +1,8 @@
 project_id = "yidujufgbevuzwzodjln"
 
+[functions.keep-alive]
+verify_jwt = false
+
 [functions.sync-products-sheets]
 verify_jwt = false
 
