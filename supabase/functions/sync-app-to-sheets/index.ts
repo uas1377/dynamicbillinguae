@@ -98,22 +98,58 @@ serve(async (req) => {
     }
 
     // Write updated data back to Google Sheets
+    // Note: Writing to Google Sheets requires OAuth or a service account, not just an API key
+    // For now, we'll return the updated data and let the user know they need proper auth
     if (quantitiesUpdated > 0) {
-      console.log(`Writing ${quantitiesUpdated} quantity updates to Google Sheets...`);
+      console.log(`Found ${quantitiesUpdated} quantity differences. Attempting to write to Google Sheets...`);
+      
+      // Try using the API key (this works for some publicly editable sheets)
       const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW&key=${apiKey}`;
-      const updateResponse = await fetch(updateUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          values: updatedRows
-        })
-      });
+      
+      try {
+        const updateResponse = await fetch(updateUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            values: updatedRows
+          })
+        });
 
-      if (!updateResponse.ok) {
-        console.error('Failed to update Google Sheets:', updateResponse.status);
-        return new Response(JSON.stringify({ error: 'Failed to update Google Sheets' }), {
+        if (!updateResponse.ok) {
+          const errorText = await updateResponse.text();
+          console.error('Failed to update Google Sheets:', updateResponse.status, errorText);
+          
+          // Check if it's an authentication error
+          if (updateResponse.status === 401 || updateResponse.status === 403) {
+            return new Response(JSON.stringify({ 
+              error: 'Write access denied. Make your Google Sheet publicly editable, or this feature requires OAuth authentication which is not yet supported.',
+              quantitiesUpdated: 0,
+              pendingUpdates: quantitiesUpdated
+            }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          
+          return new Response(JSON.stringify({ 
+            error: `Failed to update Google Sheets: ${errorText}`,
+            quantitiesUpdated: 0
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        console.log('Successfully updated Google Sheets');
+      } catch (writeError: unknown) {
+        const errorMessage = writeError instanceof Error ? writeError.message : 'Unknown error';
+        console.error('Write error:', writeError);
+        return new Response(JSON.stringify({ 
+          error: `Failed to write to sheets: ${errorMessage}`,
+          quantitiesUpdated: 0
+        }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
