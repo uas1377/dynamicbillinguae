@@ -4,16 +4,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Package, Plus, Edit, Trash2 } from "lucide-react";
+import { Package, Plus, Edit, Trash2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import GoogleSheetsSync from "./GoogleSheetsSync";
+import BarcodeScanner from "@/components/ui/BarcodeScanner";
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     barcode: '',
@@ -248,12 +250,23 @@ const ProductManagement = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="barcode">Barcode Number</Label>
-                <Input
-                  id="barcode"
-                  placeholder="Enter barcode (optional)"
-                  value={formData.barcode}
-                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="barcode"
+                    placeholder="Scan or enter barcode"
+                    value={formData.barcode}
+                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setScannerOpen(true)}
+                    className="px-3"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -330,6 +343,15 @@ const ProductManagement = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={(barcode) => {
+          setFormData({ ...formData, barcode });
+          toast.success(`Barcode scanned: ${barcode}`);
+        }}
+      />
     </div>
   );
 };
