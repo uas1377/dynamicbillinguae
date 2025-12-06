@@ -27,7 +27,6 @@ serve(async (req) => {
     }
     
     const { apiKey, spreadsheetId } = body;
-    const range = 'Sheet1!A:F';
     
     console.log('API Key present:', !!apiKey);
     console.log('Spreadsheet ID:', spreadsheetId);
@@ -39,23 +38,45 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Supabase environment variables not configured');
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch from Google Sheets
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?key=${apiKey}`;
-    console.log('Fetching from:', sheetsUrl.replace(apiKey, 'API_KEY_HIDDEN'));
+    // Try fetching with just A:F range (works for first sheet)
+    const range = 'A:F';
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+    console.log('Fetching from Google Sheets...');
     
-    const sheetsResponse = await fetch(sheetsUrl);
+    let sheetsResponse;
+    try {
+      sheetsResponse = await fetch(sheetsUrl);
+    } catch (fetchError) {
+      console.error('Network error fetching Google Sheets:', fetchError);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to connect to Google Sheets API',
+        details: fetchError instanceof Error ? fetchError.message : 'Network error'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     const responseText = await sheetsResponse.text();
-    
     console.log('Sheets API status:', sheetsResponse.status);
     
     if (!sheetsResponse.ok) {
       console.error('Google Sheets API error:', responseText);
       return new Response(JSON.stringify({ 
-        error: 'Failed to fetch from Google Sheets',
+        error: 'Google Sheets API error',
         details: responseText,
         status: sheetsResponse.status
       }), {
@@ -110,6 +131,15 @@ serve(async (req) => {
           .from('products')
           .select('*')
           .eq('sku', sheetProduct.sku)
+          .maybeSingle();
+        existingProduct = data;
+      }
+      
+      if (!existingProduct && sheetProduct.barcode) {
+        const { data } = await supabase
+          .from('products')
+          .select('*')
+          .eq('barcode', sheetProduct.barcode)
           .maybeSingle();
         existingProduct = data;
       }
@@ -171,7 +201,7 @@ serve(async (req) => {
     console.log('Sync completed. Changes:', changesCount);
 
     return new Response(JSON.stringify({ 
-      message: 'Polling completed',
+      message: 'Sync from sheet completed',
       changes: changesCount
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
