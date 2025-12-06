@@ -118,9 +118,16 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   };
 
   const handleSync = async () => {
+    if (!apiKey || !spreadsheetId) {
+      toast.error('Please configure API key and Spreadsheet ID first');
+      return;
+    }
+    
     setSyncing(true);
     try {
       console.log('Starting manual sync (Sheet → App)...');
+      console.log('API Key present:', !!apiKey);
+      console.log('Spreadsheet ID:', spreadsheetId);
       
       const { data, error } = await supabase.functions.invoke('poll-sheets-for-changes', {
         body: { 
@@ -129,9 +136,23 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         }
       });
 
+      console.log('Full response:', { data, error });
+
       if (error) {
-        console.error('Sync error:', error);
-        toast.error('Failed to sync: ' + error.message);
+        console.error('Sync invoke error:', error);
+        const errorMsg = typeof error === 'object' ? (error.message || JSON.stringify(error)) : error;
+        toast.error('Failed to sync: ' + errorMsg);
+        return;
+      }
+
+      if (!data) {
+        toast.error('No response received from server');
+        return;
+      }
+
+      if (data.error) {
+        console.error('Sync data error:', data.error);
+        toast.error('Sync error: ' + (data.details || data.error));
         return;
       }
 
@@ -149,7 +170,8 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
       }
     } catch (error) {
       console.error('Error during sync:', error);
-      toast.error('Failed to sync: ' + error.message);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to send request to the Edge Function: ' + errorMsg);
     } finally {
       setSyncing(false);
     }
