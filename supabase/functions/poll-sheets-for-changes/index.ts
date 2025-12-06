@@ -15,8 +15,22 @@ serve(async (req) => {
   try {
     console.log('Polling Google Sheets for changes...');
     
-    const { apiKey, spreadsheetId } = await req.json();
-    const range = 'A:F';
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error('Failed to parse request body:', e);
+      return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    const { apiKey, spreadsheetId } = body;
+    const range = 'Sheet1!A:F';
+    
+    console.log('API Key present:', !!apiKey);
+    console.log('Spreadsheet ID:', spreadsheetId);
     
     if (!apiKey || !spreadsheetId) {
       return new Response(JSON.stringify({ error: 'API key and spreadsheet ID required' }), {
@@ -30,18 +44,39 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch from Google Sheets
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?key=${apiKey}`;
+    console.log('Fetching from:', sheetsUrl.replace(apiKey, 'API_KEY_HIDDEN'));
+    
     const sheetsResponse = await fetch(sheetsUrl);
+    const responseText = await sheetsResponse.text();
+    
+    console.log('Sheets API status:', sheetsResponse.status);
     
     if (!sheetsResponse.ok) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch from Google Sheets' }), {
+      console.error('Google Sheets API error:', responseText);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to fetch from Google Sheets',
+        details: responseText,
+        status: sheetsResponse.status
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const sheetsData = await sheetsResponse.json();
+    let sheetsData;
+    try {
+      sheetsData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse sheets response:', e);
+      return new Response(JSON.stringify({ error: 'Invalid response from Google Sheets' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     const rows = sheetsData.values || [];
+    console.log('Total rows from sheet:', rows.length);
     
     if (rows.length <= 1) {
       return new Response(JSON.stringify({ message: 'No data in sheets', changes: 0 }), {
@@ -51,19 +86,21 @@ serve(async (req) => {
 
     let changesCount = 0;
 
-    // Process each row from sheets
+    // Process each row from sheets (skip header row)
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!row[0] || !row[0].trim()) continue;
+      if (!row[0] || !row[0].toString().trim()) continue;
 
       const sheetProduct = {
-        name: row[0].trim(),
-        barcode: row[1] ? row[1].trim() : null,
-        sku: row[2] ? row[2].trim() : null,
-        quantity: row[3] ? parseInt(row[3]) || 0 : 0,
-        price: row[4] ? parseFloat(row[4]) || 0 : 0,
-        buying_price: row[5] ? parseFloat(row[5]) || 0 : 0,
+        name: row[0].toString().trim(),
+        barcode: row[1] ? row[1].toString().trim() : null,
+        sku: row[2] ? row[2].toString().trim() : null,
+        quantity: row[3] ? parseInt(row[3].toString()) || 0 : 0,
+        price: row[4] ? parseFloat(row[4].toString()) || 0 : 0,
+        buying_price: row[5] ? parseFloat(row[5].toString()) || 0 : 0,
       };
+
+      console.log('Processing product:', sheetProduct.name);
 
       // Check if product exists in database
       let existingProduct = null;
@@ -95,13 +132,16 @@ serve(async (req) => {
         if (!error) {
           changesCount++;
           console.log('Added new product from sheets:', sheetProduct.name);
+        } else {
+          console.error('Failed to insert product:', error);
         }
       } else {
-        // Check if product needs update (excluding quantity which is managed by app)
+        // Check if product needs update (including quantity from sheet)
         const needsUpdate = 
           existingProduct.name !== sheetProduct.name ||
           existingProduct.barcode !== sheetProduct.barcode ||
           existingProduct.sku !== sheetProduct.sku ||
+          existingProduct.quantity !== sheetProduct.quantity ||
           existingProduct.price !== sheetProduct.price ||
           existingProduct.buying_price !== sheetProduct.buying_price;
 
@@ -112,6 +152,7 @@ serve(async (req) => {
               name: sheetProduct.name,
               barcode: sheetProduct.barcode,
               sku: sheetProduct.sku,
+              quantity: sheetProduct.quantity,
               price: sheetProduct.price,
               buying_price: sheetProduct.buying_price,
             })
@@ -120,10 +161,14 @@ serve(async (req) => {
           if (!error) {
             changesCount++;
             console.log('Updated product from sheets:', sheetProduct.name);
+          } else {
+            console.error('Failed to update product:', error);
           }
         }
       }
     }
+
+    console.log('Sync completed. Changes:', changesCount);
 
     return new Response(JSON.stringify({ 
       message: 'Polling completed',
