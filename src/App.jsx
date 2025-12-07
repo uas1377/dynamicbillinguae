@@ -10,6 +10,7 @@ import RoleSelection from "./pages/RoleSelection";
 import CashierPanel from "./pages/CashierPanel";
 import CustomerPanel from "./pages/CustomerPanel";
 import AdminPanel from "./pages/AdminPanel";
+import ThemeToggle from "./components/ui/ThemeToggle";
 
 const queryClient = new QueryClient();
 
@@ -17,6 +18,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <div className="status-bar-overlay"></div>
+      <ThemeToggle />
       <Toaster />
       <BrowserRouter>
         <Routes>
