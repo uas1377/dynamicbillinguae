@@ -22,10 +22,10 @@ const Receipt2 = ({ data, isPrint = false }) => {
       <div
         className="bg-white flex flex-col min-h-full"
         style={{
-          fontSize: isPrint ? "8px" : "14px",
-          fontFamily: "'Consolas', monospace",
+          fontSize: isPrint ? "11px" : "17px",
+          fontFamily: "Arial, sans-serif",
           whiteSpace: "pre-wrap",
-          lineHeight: "1.2",
+          lineHeight: "1.3",
         }}
       >
         <div className="flex-grow">
