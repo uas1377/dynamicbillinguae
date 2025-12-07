@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle, Settings, Trash2, Save, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,10 +68,20 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
     setEditMode(true);
   };
 
-  const handleClearAllProducts = () => {
-    localStorage.removeItem('products');
-    toast.success('All products cleared successfully');
-    if (onSyncComplete) onSyncComplete();
+  const handleClearAllProducts = async () => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+      toast.success('All products cleared successfully');
+      if (onSyncComplete) onSyncComplete();
+    } catch (error) {
+      console.error('Error clearing products:', error);
+      toast.error('Failed to clear products');
+    }
   };
 
   const handleClearBusinessDetails = () => {
@@ -127,40 +138,52 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
                         rows[0]?.[0]?.toString().toLowerCase().includes('product');
       const dataRows = hasHeader ? rows.slice(1) : rows;
       
-      const products = [];
+      let syncedCount = 0;
+      let updatedCount = 0;
 
       for (const row of dataRows) {
         if (!row[0] || row[0].toString().trim() === '') continue;
 
-        const product = {
-          id: crypto.randomUUID(),
+        const productData = {
           name: row[0]?.toString().trim() || '',
-          barcode: row[1]?.toString().trim() || '',
-          sku: row[2]?.toString().trim() || '',
+          barcode: row[1]?.toString().trim() || null,
+          sku: row[2]?.toString().trim() || null,
           quantity: parseInt(row[3]) || 0,
           price: parseFloat(row[4]) || 0,
           buying_price: parseFloat(row[5]) || 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
         };
 
-        products.push(product);
-      }
+        // Check if product exists by SKU or name
+        const { data: existing } = await supabase
+          .from('products')
+          .select('id')
+          .or(`sku.eq.${productData.sku},name.eq.${productData.name}`)
+          .limit(1);
 
-      if (products.length === 0) {
-        toast.warning('No valid products found in the spreadsheet');
-        return;
+        if (existing && existing.length > 0) {
+          // Update existing product
+          const { error } = await supabase
+            .from('products')
+            .update(productData)
+            .eq('id', existing[0].id);
+          
+          if (!error) updatedCount++;
+        } else {
+          // Insert new product
+          const { error } = await supabase
+            .from('products')
+            .insert(productData);
+          
+          if (!error) syncedCount++;
+        }
       }
-
-      // Save to local storage
-      localStorage.setItem('products', JSON.stringify(products));
 
       const now = new Date();
       setLastSync(now);
       localStorage.setItem('googleSheetsLastSync', now.toISOString());
 
-      toast.success(`Synced ${products.length} products from Google Sheets`);
-      console.log('Products saved to local storage:', products.length);
+      toast.success(`Synced: ${syncedCount} new, ${updatedCount} updated`);
+      console.log('Products synced to database:', syncedCount + updatedCount);
       
       if (onSyncComplete) {
         onSyncComplete();
