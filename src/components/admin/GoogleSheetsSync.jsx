@@ -4,9 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle, Settings, Trash2, Save } from "lucide-react";
+import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle, Settings, Trash2, Save, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,61 +21,37 @@ import {
 const GoogleSheetsSync = ({ onSyncComplete }) => {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
-  const [syncStats, setSyncStats] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [autoSync, setAutoSync] = useState(false);
-  const [syncInterval, setSyncInterval] = useState(30);
-  const [syncingToSheet, setSyncingToSheet] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  // Auto-sync polling
-  useEffect(() => {
-    if (!autoSync || !apiKey || !spreadsheetId) return;
-
-    const pollSheets = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('poll-sheets-for-changes', {
-          body: { apiKey, spreadsheetId }
-        });
-
-        if (error) throw error;
-        
-        if (data.changes > 0) {
-          console.log(`Auto-sync: ${data.changes} changes from sheets`);
-        }
-      } catch (error) {
-        console.error('Auto-sync error:', error);
-      }
-    };
-
-    const intervalId = setInterval(pollSheets, syncInterval * 1000);
-    pollSheets(); // Run immediately
-
-    return () => clearInterval(intervalId);
-  }, [autoSync, apiKey, spreadsheetId, syncInterval]);
-
   const loadSettings = () => {
     const savedApiKey = localStorage.getItem('googleSheetsApiKey') || '';
     const savedSpreadsheetId = localStorage.getItem('googleSheetsSpreadsheetId') || '';
-    const savedAutoSync = localStorage.getItem('googleSheetsAutoSync');
-    const savedSyncInterval = localStorage.getItem('googleSheetsSyncInterval');
+    const savedLastSync = localStorage.getItem('googleSheetsLastSync');
     
     setApiKey(savedApiKey);
     setSpreadsheetId(savedSpreadsheetId);
-    if (savedAutoSync) setAutoSync(savedAutoSync === 'true');
-    if (savedSyncInterval) setSyncInterval(parseInt(savedSyncInterval));
+    if (savedLastSync) setLastSync(new Date(savedLastSync));
+
+    if (!savedApiKey || !savedSpreadsheetId) {
+      setEditMode(true);
+    }
   };
 
   const handleSaveSettings = () => {
-    localStorage.setItem('googleSheetsApiKey', apiKey);
-    localStorage.setItem('googleSheetsSpreadsheetId', spreadsheetId);
-    localStorage.setItem('googleSheetsAutoSync', autoSync.toString());
-    localStorage.setItem('googleSheetsSyncInterval', syncInterval.toString());
+    if (!apiKey.trim() || !spreadsheetId.trim()) {
+      toast.error('Please enter both API Key and Spreadsheet ID');
+      return;
+    }
+
+    localStorage.setItem('googleSheetsApiKey', apiKey.trim());
+    localStorage.setItem('googleSheetsSpreadsheetId', spreadsheetId.trim());
     toast.success('Settings saved successfully');
     setEditMode(false);
   };
@@ -84,148 +59,117 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
   const handleClearSettings = () => {
     localStorage.removeItem('googleSheetsApiKey');
     localStorage.removeItem('googleSheetsSpreadsheetId');
+    localStorage.removeItem('googleSheetsLastSync');
     setApiKey('');
     setSpreadsheetId('');
+    setLastSync(null);
     toast.success('Settings cleared successfully');
-    setEditMode(false);
+    setEditMode(true);
   };
 
-  const handleClearAllProducts = async () => {
-    try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      if (error) throw error;
-
-      toast.success('All products cleared successfully');
-      if (onSyncComplete) onSyncComplete();
-    } catch (error) {
-      console.error('Error clearing products:', error);
-      toast.error('Failed to clear products');
-    }
+  const handleClearAllProducts = () => {
+    localStorage.removeItem('products');
+    toast.success('All products cleared successfully');
+    if (onSyncComplete) onSyncComplete();
   };
 
-  const handleClearBusinessDetails = async () => {
-    try {
-      localStorage.removeItem('businessSettings');
-      toast.success('Business details cleared successfully');
-    } catch (error) {
-      console.error('Error clearing business details:', error);
-      toast.error('Failed to clear business details');
-    }
+  const handleClearBusinessDetails = () => {
+    localStorage.removeItem('businessSettings');
+    toast.success('Business details cleared successfully');
   };
 
   const handleSync = async () => {
     if (!apiKey || !spreadsheetId) {
       toast.error('Please configure API key and Spreadsheet ID first');
+      setEditMode(true);
       return;
     }
     
     setSyncing(true);
     try {
-      console.log('Starting manual sync (Sheet → App)...');
-      console.log('API Key present:', !!apiKey);
-      console.log('Spreadsheet ID:', spreadsheetId);
+      console.log('Starting sync from Google Sheets...');
       
-      const { data, error } = await supabase.functions.invoke('poll-sheets-for-changes', {
-        body: { 
-          apiKey: apiKey,
-          spreadsheetId: spreadsheetId 
+      // Fetch directly from Google Sheets API
+      const sheetRange = 'A:F';
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetRange)}?key=${apiKey}`;
+      
+      console.log('Fetching from:', url);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Google Sheets API error:', response.status, errorText);
+        
+        if (response.status === 403) {
+          toast.error('API Key not authorized. Make sure Google Sheets API is enabled.');
+        } else if (response.status === 404) {
+          toast.error('Spreadsheet not found. Check the Spreadsheet ID.');
+        } else if (response.status === 400) {
+          toast.error('Invalid request. Check your API Key and Spreadsheet ID.');
+        } else {
+          toast.error(`Google Sheets error: ${response.status}`);
         }
-      });
-
-      console.log('Full response:', { data, error });
-
-      if (error) {
-        console.error('Sync invoke error:', error);
-        const errorMsg = typeof error === 'object' ? (error.message || JSON.stringify(error)) : error;
-        toast.error('Failed to sync: ' + errorMsg);
         return;
       }
 
-      if (!data) {
-        toast.error('No response received from server');
+      const data = await response.json();
+      console.log('Google Sheets response:', data);
+
+      if (!data.values || data.values.length === 0) {
+        toast.warning('No data found in the spreadsheet');
         return;
       }
 
-      if (data.error) {
-        console.error('Sync data error:', data.error);
-        toast.error('Sync error: ' + (data.details || data.error));
-        return;
-      }
-
-      console.log('Sync response:', data);
-      setLastSync(new Date());
+      // Parse products from sheet data (skip header row if first cell looks like a header)
+      const rows = data.values;
+      const hasHeader = rows[0]?.[0]?.toString().toLowerCase().includes('name') || 
+                        rows[0]?.[0]?.toString().toLowerCase().includes('product');
+      const dataRows = hasHeader ? rows.slice(1) : rows;
       
-      if (data.changes > 0) {
-        toast.success(`Synced ${data.changes} products from sheet to app`);
-      } else {
-        toast.info('No changes to sync');
+      const products = [];
+
+      for (const row of dataRows) {
+        if (!row[0] || row[0].toString().trim() === '') continue;
+
+        const product = {
+          id: crypto.randomUUID(),
+          name: row[0]?.toString().trim() || '',
+          barcode: row[1]?.toString().trim() || '',
+          sku: row[2]?.toString().trim() || '',
+          quantity: parseInt(row[3]) || 0,
+          price: parseFloat(row[4]) || 0,
+          buying_price: parseFloat(row[5]) || 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        products.push(product);
       }
+
+      if (products.length === 0) {
+        toast.warning('No valid products found in the spreadsheet');
+        return;
+      }
+
+      // Save to local storage
+      localStorage.setItem('products', JSON.stringify(products));
+
+      const now = new Date();
+      setLastSync(now);
+      localStorage.setItem('googleSheetsLastSync', now.toISOString());
+
+      toast.success(`Synced ${products.length} products from Google Sheets`);
+      console.log('Products saved to local storage:', products.length);
       
       if (onSyncComplete) {
         onSyncComplete();
       }
     } catch (error) {
       console.error('Error during sync:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      toast.error('Failed to send request to the Edge Function: ' + errorMsg);
+      toast.error(`Sync failed: ${error.message}`);
     } finally {
       setSyncing(false);
-    }
-  };
-
-  const handleSyncToSheet = async () => {
-    if (!apiKey || !spreadsheetId) {
-      toast.error('Please configure API key and Spreadsheet ID first');
-      return;
-    }
-
-    setSyncingToSheet(true);
-    try {
-      console.log('Starting sync (App → Sheet quantities)...');
-      console.log('API Key present:', !!apiKey);
-      console.log('Spreadsheet ID:', spreadsheetId);
-      
-      const { data, error } = await supabase.functions.invoke('sync-app-to-sheets', {
-        body: { 
-          apiKey,
-          spreadsheetId 
-        }
-      });
-
-      console.log('Invoke response:', { data, error });
-
-      if (error) {
-        console.error('Sync error:', error);
-        toast.error(`Failed to sync: ${error.message || JSON.stringify(error)}`);
-        return;
-      }
-
-      if (!data) {
-        toast.error('No response from sync function');
-        return;
-      }
-
-      console.log('Sync response:', data);
-      
-      if (data.error) {
-        toast.error(`Sync failed: ${data.error}`);
-        return;
-      }
-
-      if (data.quantitiesUpdated > 0) {
-        toast.success(`Updated ${data.quantitiesUpdated} quantities in sheet`);
-      } else {
-        toast.info('All quantities are up to date');
-      }
-    } catch (error) {
-      console.error('Error during sync:', error);
-      toast.error(`Failed to sync: ${error.message || 'Unknown error'}`);
-    } finally {
-      setSyncingToSheet(false);
     }
   };
 
@@ -238,157 +182,121 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Settings Section */}
-            {editMode ? (
-              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <div className="space-y-2">
-                  <Label htmlFor="apiKey">Google Sheets API Key</Label>
-                  <Input
-                    id="apiKey"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter API key"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="spreadsheetId">Spreadsheet ID</Label>
-                  <Input
-                    id="spreadsheetId"
-                    value={spreadsheetId}
-                    onChange={(e) => setSpreadsheetId(e.target.value)}
-                    placeholder="Enter spreadsheet ID"
-                  />
-                </div>
-                
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-medium">Auto-Sync</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Automatically sync changes from Google Sheets
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={autoSync}
-                      onChange={(e) => setAutoSync(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                  </div>
-                  
-                  {autoSync && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Sync Interval (seconds)
-                      </Label>
-                      <Input
-                        type="number"
-                        min="10"
-                        max="300"
-                        value={syncInterval}
-                        onChange={(e) => setSyncInterval(parseInt(e.target.value) || 30)}
-                        placeholder="30"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        How often to check for changes (10-300 seconds)
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveSettings} className="flex-1">
-                    <Save className="w-4 h-4 mr-2" />
-                    Save
-                  </Button>
-                  <Button onClick={() => setEditMode(false)} variant="outline">
-                    Cancel
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Clear Settings?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will remove your API key and spreadsheet ID. You'll need to re-enter them to sync.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleClearSettings}>Clear</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+        {editMode ? (
+          <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+            <div className="space-y-2">
+              <Label htmlFor="apiKey">Google Sheets API Key</Label>
+              <div className="relative">
+                <Input
+                  id="apiKey"
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Enter API key"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      {apiKey && spreadsheetId ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                          Connected
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="w-3 h-3 text-yellow-500" />
-                          Not Configured
-                        </>
-                      )}
-                    </Badge>
-                    {spreadsheetId && (
-                      <span className="text-sm text-muted-foreground">
-                        ID: {spreadsheetId.substring(0, 10)}...
-                      </span>
-                    )}
-                  </div>
-                  <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Configure
-                  </Button>
-                </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="spreadsheetId">Spreadsheet ID</Label>
+              <Input
+                id="spreadsheetId"
+                value={spreadsheetId}
+                onChange={(e) => setSpreadsheetId(e.target.value)}
+                placeholder="Enter spreadsheet ID"
+              />
+              <p className="text-xs text-muted-foreground">
+                Found in URL: docs.google.com/spreadsheets/d/<strong>[ID]</strong>/edit
+              </p>
+            </div>
 
-                {autoSync && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    Auto-sync enabled (every {syncInterval}s)
-                  </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSaveSettings} className="flex-1">
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+              {(apiKey || spreadsheetId) && (
+                <Button onClick={() => setEditMode(false)} variant="outline">
+                  Cancel
+                </Button>
+              )}
+              {(apiKey || spreadsheetId) && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear Settings?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will remove your API key and spreadsheet ID.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearSettings}>Clear</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  {apiKey && spreadsheetId ? (
+                    <>
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      Connected
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-3 h-3 text-yellow-500" />
+                      Not Configured
+                    </>
+                  )}
+                </Badge>
+                {spreadsheetId && (
+                  <span className="text-sm text-muted-foreground">
+                    ID: {spreadsheetId.substring(0, 10)}...
+                  </span>
                 )}
               </div>
-            )}
-            
-            <div className="text-sm text-muted-foreground">
-              <p className="mb-2">Column mapping:</p>
-              <ul className="space-y-1 text-xs">
-                <li>• Column A: Product Name</li>
-                <li>• Column B: Barcode</li>
-                <li>• Column C: SKU Number</li>
-                <li>• Column D: Quantity</li>
-                <li>• Column E: Price (Selling)</li>
-                <li>• Column F: Buying Price (Cost)</li>
-              </ul>
+              <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
+                <Settings className="w-4 h-4 mr-2" />
+                Configure
+              </Button>
             </div>
+          </div>
+        )}
+        
+        <div className="text-sm text-muted-foreground">
+          <p className="mb-2">Column mapping:</p>
+          <ul className="space-y-1 text-xs">
+            <li>• Column A: Product Name</li>
+            <li>• Column B: Barcode</li>
+            <li>• Column C: SKU Number</li>
+            <li>• Column D: Quantity</li>
+            <li>• Column E: Price (Selling)</li>
+            <li>• Column F: Buying Price (Cost)</li>
+          </ul>
+        </div>
 
         {lastSync && (
           <div className="text-sm">
             <p className="text-muted-foreground">Last sync: {lastSync.toLocaleString()}</p>
-            {syncStats && (
-              <div className="text-green-600 space-y-1">
-                {syncStats.quantitiesUpdated > 0 && (
-                  <p>• {syncStats.quantitiesUpdated} quantities updated in sheets</p>
-                )}
-                {syncStats.newProductsFromSheets > 0 && (
-                  <p>• {syncStats.newProductsFromSheets} new products from sheets</p>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -406,20 +314,6 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
             {syncing ? 'Syncing...' : 'Sync from Sheet'}
           </Button>
 
-          <Button 
-            onClick={handleSyncToSheet} 
-            disabled={syncingToSheet || !apiKey || !spreadsheetId}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            {syncingToSheet ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            {syncingToSheet ? 'Syncing...' : 'Sync to Sheet'}
-          </Button>
-
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
@@ -431,7 +325,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear All Products?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete all products from the database. This action cannot be undone.
+                  This will permanently delete all products from local storage.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -454,7 +348,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear Business Details?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will remove your business name, address, phone, and logo from the system.
+                  This will remove your business name, address, phone, and logo.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -470,15 +364,8 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
         <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-2">
-              <div>
-                <strong>Real-time Sync:</strong> Products automatically sync between app and Google Sheets.
-              </div>
-              <ul className="space-y-1 list-disc list-inside ml-2">
-                <li><strong>App → Sheets:</strong> Products added/updated/sold sync instantly</li>
-                <li><strong>Sheets → App:</strong> Enable auto-sync to poll for changes</li>
-                <li>Quantities update automatically when products are sold</li>
-              </ul>
+            <div className="text-xs text-blue-700 dark:text-blue-300">
+              <p>Products sync directly from Google Sheets to your browser's local storage. Make sure your spreadsheet is publicly accessible (View access) or the API key has proper permissions.</p>
             </div>
           </div>
         </div>
