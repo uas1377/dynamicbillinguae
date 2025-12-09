@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
-import SearchableCustomerSelect from "@/components/ui/SearchableCustomerSelect";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
@@ -22,9 +23,12 @@ const CreateInvoice = () => {
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [taxRate, setTaxRate] = useState(0);
   const [invoiceStatus, setInvoiceStatus] = useState('unpaid');
-  const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percentage'
+  const [discountType, setDiscountType] = useState('amount');
   const [discountValue, setDiscountValue] = useState(0);
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
+  const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
+  const [amountReceived, setAmountReceived] = useState(0);
+  const [cashierName, setCashierName] = useState('');
   const [businessSettings, setBusinessSettings] = useState({
     name: '',
     address: '',
@@ -35,19 +39,20 @@ const CreateInvoice = () => {
 
   useEffect(() => {
     loadData();
+    // Get cashier name from session
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    setCashierName(user.username || 'Cashier');
   }, []);
 
   // Barcode scanner listener
   useEffect(() => {
     let timeout;
     const handleKeyPress = (e) => {
-      // Ignore if user is typing in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       
       clearTimeout(timeout);
       
       if (e.key === 'Enter' && barcodeBuffer.length > 0) {
-        // Process barcode
         const product = products.find(p => p.barcode === barcodeBuffer.trim());
         if (product) {
           addProductToInvoice(product);
@@ -57,7 +62,6 @@ const CreateInvoice = () => {
         }
         setBarcodeBuffer('');
       } else if (e.key.length === 1) {
-        // Build barcode buffer
         setBarcodeBuffer(prev => prev + e.key);
         timeout = setTimeout(() => setBarcodeBuffer(''), 100);
       }
@@ -180,6 +184,11 @@ const CreateInvoice = () => {
     return calculateSubtotal() - calculateDiscount() + calculateTax();
   };
 
+  const calculateChange = () => {
+    const change = amountReceived - calculateTotal();
+    return change > 0 ? change : 0;
+  };
+
   const generateInvoiceNumber = async () => {
     try {
       const { data } = await supabase
@@ -203,7 +212,6 @@ const CreateInvoice = () => {
       return;
     }
 
-    // Check if all products have amounts set
     const productsWithoutAmount = selectedProducts.filter(p => p.amount <= 0);
     if (productsWithoutAmount.length > 0) {
       toast.error('Please set amount for all products');
@@ -227,10 +235,12 @@ const CreateInvoice = () => {
         tax_rate: taxRate,
         tax_amount: calculateTax(),
         grand_total: calculateTotal(),
-        status: invoiceStatus
+        status: invoiceStatus,
+        cashier_name: cashierName,
+        amount_received: amountReceived,
+        change_amount: calculateChange()
       };
 
-      // Save invoice to Supabase
       const { error: invoiceError } = await supabase
         .from('invoices')
         .insert(newInvoice);
@@ -240,7 +250,6 @@ const CreateInvoice = () => {
         return;
       }
 
-      // Update product quantities in Supabase
       const updatePromises = selectedProducts.map(async (soldProduct) => {
         const product = products.find(p => p.id === soldProduct.id);
         if (product) {
@@ -256,7 +265,7 @@ const CreateInvoice = () => {
       
       toast.success(`Invoice ${invoiceNumber} saved successfully`);
       
-      // Reset form and reload data
+      // Reset form
       setSelectedProducts([]);
       setSelectedCustomer('');
       setCustomerSearch('');
@@ -264,6 +273,8 @@ const CreateInvoice = () => {
       setDiscountType('amount');
       setDiscountValue(0);
       setInvoiceStatus('unpaid');
+      setAmountReceived(0);
+      setShowCheckoutDialog(false);
       await loadData();
     } catch (error) {
       toast.error('Failed to save invoice: ' + error.message);
@@ -283,12 +294,15 @@ const CreateInvoice = () => {
       invoiceNumber,
       customerName: customer?.name || '',
       customerPhone: selectedCustomer || '',
+      cashierName: cashierName,
       items: selectedProducts,
       subTotal: calculateSubtotal().toFixed(2),
       discountAmount: calculateDiscount().toFixed(2),
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
+      amountReceived: amountReceived.toFixed(2),
+      changeAmount: calculateChange().toFixed(2),
       yourCompany: businessSettings
     };
     
@@ -313,12 +327,15 @@ const CreateInvoice = () => {
       invoiceNumber,
       customerName: customer?.name || '',
       customerPhone: selectedCustomer || '',
+      cashierName: cashierName,
       items: selectedProducts,
       subTotal: calculateSubtotal().toFixed(2),
       discountAmount: calculateDiscount().toFixed(2),
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
+      amountReceived: amountReceived.toFixed(2),
+      changeAmount: calculateChange().toFixed(2),
       yourCompany: businessSettings || { name: '', address: '', phone: '', logo: '' }
     };
     
@@ -328,6 +345,15 @@ const CreateInvoice = () => {
     } catch (error) {
       toast.error('Failed to save invoice as image');
     }
+  };
+
+  const handleOpenCheckout = () => {
+    if (selectedProducts.length === 0) {
+      toast.error('Please add at least one product');
+      return;
+    }
+    setAmountReceived(calculateTotal());
+    setShowCheckoutDialog(true);
   };
 
   return (
@@ -392,218 +418,299 @@ const CreateInvoice = () => {
                 {selectedProducts.length} Product{selectedProducts.length > 1 ? 's' : ''} Selected
               </Badge>
               <span className="text-sm font-semibold">
-                Total: {formatCurrency(calculateTotal())}
+                Total: {formatCurrency(calculateSubtotal())}
               </span>
             </div>
             <Button 
-              onClick={() => {
-                document.getElementById('invoice-items')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="gradient-primary"
+              onClick={handleOpenCheckout}
+              className="gradient-primary flex items-center gap-2"
             >
-              View Selected Products
+              Next
+              <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Selected Products */}
+      {/* Selected Products Preview (minimal) */}
       {selectedProducts.length > 0 && (
-        <Card id="invoice-items" className="gradient-card shadow-soft border-0 scroll-mt-6">
+        <Card className="gradient-card shadow-soft border-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Invoice Items
+              Selected Items ({selectedProducts.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {selectedProducts.map((product) => (
-                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
+                <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex-1">
-                    <h3 className="font-semibold">{product.name}</h3>
-                    {product.sku && <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>}
+                    <span className="font-medium">{product.name}</span>
+                    <span className="text-muted-foreground ml-2">x{product.quantity}</span>
                   </div>
-                  
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateProductQuantity(product.id, -1)}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="w-8 text-center font-semibold">{product.quantity}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateProductQuantity(product.id, 1)}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    
-                    <div className="w-full sm:w-24">
-                      <Input
-                        type="number"
-                        placeholder="Rate"
-                        value={product.amount}
-                        onChange={(e) => updateProductAmount(product.id, e.target.value)}
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-                    
-                    <div className="w-full sm:w-24 text-left sm:text-right font-semibold">
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => updateProductQuantity(product.id, -1)}>
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <span className="w-8 text-center">{product.quantity}</span>
+                    <Button size="sm" variant="outline" onClick={() => updateProductQuantity(product.id, 1)}>
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                    <span className="ml-4 font-semibold w-20 text-right">
                       {formatCurrency(product.quantity * product.amount)}
-                    </div>
+                    </span>
                   </div>
                 </div>
               ))}
-              
-              <div className="border-t pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="customer">Customer (Optional)</Label>
-                    <div className="relative">
-                      <Input
-                        placeholder="Search customer by name or phone..."
-                        value={customerSearch}
-                        onChange={(e) => filterCustomers(e.target.value)}
-                        className="mb-2"
-                      />
-                      {customerSearch && filteredCustomers.length > 0 && (
-                        <div className="absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                          {filteredCustomers.map((customer) => (
-                            <div
-                              key={customer.id}
-                              className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                              onClick={() => {
-                                setSelectedCustomer(customer.phone);
-                                setCustomerSearch(`${customer.name} - ${customer.phone}`);
-                                setFilteredCustomers([]);
-                              }}
-                            >
-                              <div className="font-medium">{customer.name}</div>
-                              <div className="text-sm text-muted-foreground">{customer.phone}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {!customerSearch && (
-                        <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Or select from dropdown" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background">
-                            {customers.map((customer) => (
-                              <SelectItem key={customer.id} value={customer.phone}>
-                                {customer.name} - {customer.phone}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="tax">Tax Rate (%)</Label>
-                    <Input
-                      id="tax"
-                      type="number"
-                      placeholder="Enter tax rate"
-                      value={taxRate}
-                      onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
-                      min="0"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="discountType">Discount Type</Label>
-                    <Select value={discountType} onValueChange={setDiscountType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select discount type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="amount">Amount</SelectItem>
-                        <SelectItem value="percentage">Percentage</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="discountValue">
-                      Discount {discountType === 'percentage' ? '(%)' : `(${formatCurrency(0).replace(/[\d.,]/g, '')})`}
-                    </Label>
-                    <Input
-                      id="discountValue"
-                      type="number"
-                      placeholder={`Enter ${discountType === 'percentage' ? 'percentage' : 'amount'}`}
-                      value={discountValue}
-                      onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-                      min="0"
-                      max={discountType === 'percentage' ? "100" : undefined}
-                      step={discountType === 'percentage' ? "0.1" : "0.01"}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Discount Amount</Label>
-                    <div className="p-3 bg-muted rounded-md">
-                      <span className="font-semibold">{formatCurrency(calculateDiscount())}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-right space-y-2">
-                  <p className="text-lg">Subtotal: <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span></p>
-                  {calculateDiscount() > 0 && (
-                    <p className="text-lg text-green-600">Discount: <span className="font-semibold">-{formatCurrency(calculateDiscount())}</span></p>
-                  )}
-                  {taxRate > 0 && (
-                    <p className="text-lg">Tax ({taxRate}%): <span className="font-semibold">{formatCurrency(calculateTax())}</span></p>
-                  )}
-                  <p className="text-xl font-bold">Total: <span className="text-primary">{formatCurrency(calculateTotal())}</span></p>
-                </div>
-                
-                <div className="flex items-center justify-between mt-6">
-                  <div className="flex items-center gap-4">
-                    <Button
-                      onClick={() => setInvoiceStatus(invoiceStatus === 'paid' ? 'unpaid' : 'paid')}
-                      variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}
-                    >
-                      {invoiceStatus === 'paid' ? 'Paid' : 'Unpaid'}
-                    </Button>
-                    <Badge variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}>
-                      {invoiceStatus.toUpperCase()}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                    <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
-                      <Printer className="w-4 h-4" />
-                      Print
-                    </Button>
-                    <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
-                      <Image className="w-4 h-4" />
-                      Save as Image
-                    </Button>
-                    <Button onClick={saveInvoice} className="gradient-primary text-white border-0 w-full sm:w-auto">
-                      Save Invoice
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Checkout Dialog */}
+      <Dialog open={showCheckoutDialog} onOpenChange={setShowCheckoutDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Invoice Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Cashier Info */}
+            <div className="text-sm text-muted-foreground">
+              Cashier: <span className="font-semibold text-foreground">{cashierName}</span>
+            </div>
+
+            {/* Products Table */}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Barcode/SKU</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-center">Qty</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-mono text-xs">{product.barcode || product.sku || '-'}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <span className="w-8 text-center">{product.quantity}</span>
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="number"
+                          value={product.amount}
+                          onChange={(e) => updateProductAmount(product.id, e.target.value)}
+                          className="w-20 h-8 text-right ml-auto"
+                          min="0"
+                          step="0.01"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {formatCurrency(product.quantity * product.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Subtotal and Total */}
+            <div className="flex justify-end">
+              <div className="w-64 space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span>
+                </div>
+                {calculateDiscount() > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount:</span>
+                    <span className="font-semibold">-{formatCurrency(calculateDiscount())}</span>
+                  </div>
+                )}
+                {taxRate > 0 && (
+                  <div className="flex justify-between">
+                    <span>Tax ({taxRate}%):</span>
+                    <span className="font-semibold">{formatCurrency(calculateTax())}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-bold border-t pt-2">
+                  <span>Total:</span>
+                  <span className="text-primary">{formatCurrency(calculateTotal())}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer, Tax, Discount Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer">Customer (Optional)</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search customer by name or phone..."
+                    value={customerSearch}
+                    onChange={(e) => filterCustomers(e.target.value)}
+                    className="mb-2"
+                  />
+                  {customerSearch && filteredCustomers.length > 0 && (
+                    <div className="absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                      {filteredCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                          onClick={() => {
+                            setSelectedCustomer(customer.phone);
+                            setCustomerSearch(`${customer.name} - ${customer.phone}`);
+                            setFilteredCustomers([]);
+                          }}
+                        >
+                          <div className="font-medium">{customer.name}</div>
+                          <div className="text-sm text-muted-foreground">{customer.phone}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!customerSearch && (
+                    <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Or select from dropdown" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background">
+                        {customers.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.phone}>
+                            {customer.name} - {customer.phone}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="tax">Tax Rate (%)</Label>
+                <Input
+                  id="tax"
+                  type="number"
+                  placeholder="Enter tax rate"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                  min="0"
+                  max="100"
+                  step="0.1"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="discountType">Discount Type</Label>
+                <Select value={discountType} onValueChange={setDiscountType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select discount type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="amount">Amount</SelectItem>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="discountValue">
+                  Discount {discountType === 'percentage' ? '(%)' : `(${formatCurrency(0).replace(/[\d.,]/g, '')})`}
+                </Label>
+                <Input
+                  id="discountValue"
+                  type="number"
+                  placeholder={`Enter ${discountType === 'percentage' ? 'percentage' : 'amount'}`}
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                  min="0"
+                  max={discountType === 'percentage' ? "100" : undefined}
+                  step={discountType === 'percentage' ? "0.1" : "0.01"}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Discount Amount</Label>
+                <div className="p-3 bg-muted rounded-md">
+                  <span className="font-semibold">{formatCurrency(calculateDiscount())}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Amount Received and Change */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="space-y-2">
+                <Label htmlFor="amountReceived" className="text-lg font-semibold">Amount Received</Label>
+                <Input
+                  id="amountReceived"
+                  type="number"
+                  placeholder="Enter amount received"
+                  value={amountReceived}
+                  onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
+                  min="0"
+                  step="0.01"
+                  className="text-lg h-12"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-lg font-semibold">Change to Give</Label>
+                <div className="p-3 bg-background rounded-md border-2 border-primary h-12 flex items-center">
+                  <span className="text-2xl font-bold text-primary">{formatCurrency(calculateChange())}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status and Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={() => setInvoiceStatus(invoiceStatus === 'paid' ? 'unpaid' : 'paid')}
+                  variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}
+                >
+                  {invoiceStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                </Button>
+                <Badge variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}>
+                  {invoiceStatus.toUpperCase()}
+                </Badge>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2">
+                  <Printer className="w-4 h-4" />
+                  Print
+                </Button>
+                <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2">
+                  <Image className="w-4 h-4" />
+                  Save as Image
+                </Button>
+                <Button onClick={saveInvoice} className="gradient-primary text-white border-0">
+                  Save Invoice
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

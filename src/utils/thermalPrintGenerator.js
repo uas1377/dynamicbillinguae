@@ -3,11 +3,9 @@ import html2canvas from 'html2canvas';
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
   return new Promise((resolve, reject) => {
     try {
-      // Create thermal receipt content
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
       
-      // Create a new window for printing
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       const printDocument = printWindow.document;
       
@@ -20,17 +18,17 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             body {
               margin: 0;
               padding: 10px;
-              font-family: 'Courier New', monospace;
-              font-size: 12px;
-              line-height: 1.2;
+              font-family: Arial, sans-serif;
+              font-size: 14px;
+              line-height: 1.3;
               width: 270px;
               background: white;
               color: black;
             }
             .center { text-align: center; }
             .bold { font-weight: bold; }
-            .large { font-size: 16px; }
-            .small { font-size: 10px; }
+            .large { font-size: 18px; }
+            .small { font-size: 12px; }
             .dashed-line { 
               border-bottom: 1px dashed #000; 
               margin: 8px 0; 
@@ -42,13 +40,19 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             .item-row {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 2px;
-              font-size: 10px;
+              margin-bottom: 4px;
+              font-size: 12px;
             }
             .item-name { width: 140px; }
             .item-qty { width: 30px; text-align: center; }
             .item-rate { width: 40px; text-align: right; }
             .item-amount { width: 50px; text-align: right; }
+            .change-box {
+              background: #f0f0f0;
+              padding: 8px;
+              margin: 8px 0;
+              border-radius: 4px;
+            }
             @media print {
               body { width: 280px; }
               .no-print { display: none; }
@@ -74,6 +78,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             </div>
             ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
             ${invoiceData.customerPhone ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
+            ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
           </div>
           
           <div class="dashed-line">
@@ -117,6 +122,19 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             </div>
           </div>
           
+          ${invoiceData.amountReceived && parseFloat(invoiceData.amountReceived) > 0 ? `
+            <div class="change-box">
+              <div class="flex">
+                <span>Amount Received:</span>
+                <span class="bold">₹${invoiceData.amountReceived}</span>
+              </div>
+              <div class="flex bold large">
+                <span>Change:</span>
+                <span>₹${invoiceData.changeAmount}</span>
+              </div>
+            </div>
+          ` : ''}
+          
           <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
             <div>Thank you for your business!</div>
             <div>Visit again</div>
@@ -127,7 +145,6 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
       
       printDocument.close();
       
-      // Wait for content to load then print
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
@@ -157,19 +174,19 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       printContent.innerHTML = `
         <div style="
           width: 280px;
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
-          line-height: 1.2;
+          font-family: Arial, sans-serif;
+          font-size: 14px;
+          line-height: 1.3;
           padding: 10px;
           background: white;
           color: black;
         ">
           <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
             ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px; display: block;" />` : ''}
-            <div style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
-            ${businessSettings.address ? `<div style="font-size: 10px;">${businessSettings.address}</div>` : ''}
-            ${businessSettings.phone ? `<div style="font-size: 10px;">Tel: ${businessSettings.phone}</div>` : ''}
-            ${businessSettings.email ? `<div style="font-size: 10px;">${businessSettings.email}</div>` : ''}
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
+            ${businessSettings.address ? `<div style="font-size: 12px;">${businessSettings.address}</div>` : ''}
+            ${businessSettings.phone ? `<div style="font-size: 12px;">Tel: ${businessSettings.phone}</div>` : ''}
+            ${businessSettings.email ? `<div style="font-size: 12px;">${businessSettings.email}</div>` : ''}
           </div>
           
           <div style="margin-bottom: 8px;">
@@ -182,6 +199,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
             </div>
             ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
             ${invoiceData.customerPhone ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
+            ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
           </div>
           
           <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin: 8px 0;">
@@ -194,12 +212,12 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           </div>
           
           ${invoiceData.items.map(item => `
-            <div style="margin-bottom: 2px;">
+            <div style="margin-bottom: 4px;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="width: 140px; font-size: 10px;">${item.name}</span>
-                <span style="width: 40px; text-align: center; font-size: 10px;">${item.quantity}</span>
-                <span style="width: 50px; text-align: right; font-size: 10px;">₹${item.amount}</span>
-                <span style="width: 60px; text-align: right; font-size: 10px;">₹${(item.quantity * item.amount).toFixed(2)}</span>
+                <span style="width: 140px; font-size: 12px;">${item.name}</span>
+                <span style="width: 40px; text-align: center; font-size: 12px;">${item.quantity}</span>
+                <span style="width: 50px; text-align: right; font-size: 12px;">₹${item.amount}</span>
+                <span style="width: 60px; text-align: right; font-size: 12px;">₹${(item.quantity * item.amount).toFixed(2)}</span>
               </div>
             </div>
           `).join('')}
@@ -221,13 +239,26 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
                 <span>₹${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
-            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
               <span>₹${invoiceData.grandTotal}</span>
             </div>
           </div>
           
-          <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 10px;">
+          ${invoiceData.amountReceived && parseFloat(invoiceData.amountReceived) > 0 ? `
+            <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>Amount Received:</span>
+                <span style="font-weight: bold;">₹${invoiceData.amountReceived}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
+                <span>Change:</span>
+                <span>₹${invoiceData.changeAmount}</span>
+              </div>
+            </div>
+          ` : ''}
+          
+          <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 12px;">
             <div>Thank you for your business!</div>
             <div>Visit again</div>
           </div>

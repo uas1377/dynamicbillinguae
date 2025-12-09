@@ -45,7 +45,7 @@ const CashierPanel = () => {
           </CardHeader>
         </Card>
 
-        <Tabs defaultValue="add-product" className="w-full">
+        <Tabs defaultValue="create-invoice" className="w-full">
           <TabsList className="grid w-full grid-cols-2 gap-2 h-auto mb-6">
             <TabsTrigger value="add-product" className="flex items-center gap-2 py-3">
               <Package className="w-4 h-4" />
