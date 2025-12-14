@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Building2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import BuildingFlatSelector from "@/components/ui/BuildingFlatSelector";
+import { getStoredFlats, updateFlatPhoneInStorage } from "@/utils/buildingFlatStorage";
 
 const AddCustomer = () => {
   const [phone, setPhone] = useState('');
@@ -15,71 +15,49 @@ const AddCustomer = () => {
   const [buildings, setBuildings] = useState([]);
   const [flats, setFlats] = useState([]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!selectedBuilding) {
       toast.error('Please select a building');
       return;
     }
-    
+
     if (!selectedFlat) {
       toast.error('Please select a flat');
       return;
     }
 
     try {
-      const building = buildings.find(b => b.id === selectedBuilding);
-      const flat = flats.find(f => f.id === selectedFlat);
+      const trimmedPhone = phone.trim();
+      const updatedAllFlats = updateFlatPhoneInStorage(
+        selectedFlat,
+        trimmedPhone || null
+      );
 
-      // Check if flat already has a customer entry
-      const { data: existingCustomer } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('flat_id', selectedFlat)
-        .maybeSingle();
+      // Refresh flats state for the selected building only
+      const buildingFlats = updatedAllFlats.filter(
+        (flat) => flat.building_id === selectedBuilding
+      );
+      setFlats(buildingFlats);
 
-      if (existingCustomer) {
-        // Update existing customer with phone if provided
-        if (phone.trim()) {
-          const { error } = await supabase
-            .from('customers')
-            .update({ phone: phone.trim() })
-            .eq('id', existingCustomer.id);
+      const updatedFlat = getStoredFlats().find(
+        (flat) => flat.id === selectedFlat
+      );
 
-          if (error) {
-            toast.error('Failed to update: ' + error.message);
-            return;
-          }
-          toast.success('Flat phone number updated');
-        } else {
-          toast.info('This flat is already registered');
-        }
+      if (trimmedPhone) {
+        toast.success('Phone number saved for this flat/house');
+      } else if (updatedFlat && !updatedFlat.phone) {
+        toast.info('Flat/house saved without phone (optional)');
       } else {
-        // Create new customer entry for this flat
-        const { error } = await supabase
-          .from('customers')
-          .insert({
-            name: `${building?.name || 'Building'} - Flat ${flat?.flat_number || ''}`,
-            phone: phone.trim() || null,
-            building_id: selectedBuilding,
-            flat_id: selectedFlat,
-            address: `${building?.name || ''}, Flat ${flat?.flat_number || ''}`
-          });
-
-        if (error) {
-          toast.error('Failed to add flat: ' + error.message);
-          return;
-        }
-        
-        toast.success('Flat added successfully');
+        toast.success('Flat/house details updated');
       }
 
       setPhone('');
-      setSelectedBuilding('');
-      setSelectedFlat('');
+      setSelectedBuilding(selectedBuilding);
+      setSelectedFlat(selectedFlat);
     } catch (error) {
-      toast.error('Failed to add flat: ' + error.message);
+      toast.error('Failed to save flat details: ' + error.message);
     }
   };
 
@@ -88,7 +66,7 @@ const AddCustomer = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Building2 className="w-5 h-5" />
-          Add Building / Flat
+          Add Building / Flat (House)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -108,15 +86,18 @@ const AddCustomer = () => {
             <Label htmlFor="phone">Phone Number (Optional)</Label>
             <Input
               id="phone"
-              placeholder="Enter phone number for this flat"
+              placeholder="Enter phone number for this flat/house"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
           </div>
-          
-          <Button type="submit" className="gradient-primary text-white border-0 flex items-center gap-2">
+
+          <Button
+            type="submit"
+            className="gradient-primary text-white border-0 flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" />
-            Add Flat
+            Save Flat / House
           </Button>
         </form>
       </CardContent>

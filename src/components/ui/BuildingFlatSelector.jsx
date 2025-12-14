@@ -6,7 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getStoredBuildings,
+  getStoredFlats,
+  addBuildingToStorage,
+  addFlatToStorage,
+} from "@/utils/buildingFlatStorage";
 
 const BuildingFlatSelector = ({ 
   selectedBuilding, 
@@ -16,7 +21,7 @@ const BuildingFlatSelector = ({
   buildings,
   setBuildings,
   flats,
-  setFlats 
+  setFlats,
 }) => {
   const [showAddBuildingDialog, setShowAddBuildingDialog] = useState(false);
   const [showAddFlatDialog, setShowAddFlatDialog] = useState(false);
@@ -25,74 +30,40 @@ const BuildingFlatSelector = ({
   const [flatSearch, setFlatSearch] = useState('');
 
   useEffect(() => {
-    loadBuildings();
-  }, []);
+    // Load buildings from localStorage on mount
+    const storedBuildings = getStoredBuildings();
+    setBuildings(storedBuildings);
+  }, [setBuildings]);
 
   useEffect(() => {
+    // Load flats for the selected building from localStorage
     if (selectedBuilding) {
-      loadFlats(selectedBuilding);
+      const allFlats = getStoredFlats();
+      const buildingFlats = allFlats.filter(
+        (flat) => flat.building_id === selectedBuilding
+      );
+      setFlats(buildingFlats);
     } else {
       setFlats([]);
       setSelectedFlat('');
     }
-  }, [selectedBuilding]);
+  }, [selectedBuilding, setFlats, setSelectedFlat]);
 
-  const loadBuildings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setBuildings(data || []);
-    } catch (error) {
-      // If table doesn't exist, initialize with empty array
-      setBuildings([]);
-    }
-  };
-
-  const loadFlats = async (buildingId) => {
-    try {
-      const { data, error } = await supabase
-        .from('flats')
-        .select('*')
-        .eq('building_id', buildingId)
-        .order('flat_number', { ascending: true });
-
-      if (error) throw error;
-      setFlats(data || []);
-    } catch (error) {
-      setFlats([]);
-    }
-  };
-
-  const handleAddBuilding = async () => {
+  const handleAddBuilding = () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .insert({ name: newBuildingName.trim() })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setBuildings([...buildings, data]);
-      setSelectedBuilding(data.id);
-      setNewBuildingName('');
-      setShowAddBuildingDialog(false);
-      toast.success('Building added successfully');
-    } catch (error) {
-      toast.error('Failed to add building: ' + error.message);
-    }
+    const building = addBuildingToStorage(newBuildingName.trim());
+    setBuildings([...buildings, building]);
+    setSelectedBuilding(building.id);
+    setNewBuildingName('');
+    setShowAddBuildingDialog(false);
+    toast.success('Building added successfully');
   };
 
-  const handleAddFlat = async () => {
+  const handleAddFlat = () => {
     if (!newFlatNumber.trim()) {
       toast.error('Flat number is required');
       return;
@@ -103,29 +74,20 @@ const BuildingFlatSelector = ({
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('flats')
-        .insert({ 
-          building_id: selectedBuilding, 
-          flat_number: newFlatNumber.trim() 
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setFlats([...flats, data]);
-      setSelectedFlat(data.id);
-      setNewFlatNumber('');
-      setShowAddFlatDialog(false);
-      toast.success('Flat added successfully');
-    } catch (error) {
-      toast.error('Failed to add flat: ' + error.message);
-    }
+    const flat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
+    // Reload flats for this building to reflect any updates from storage
+    const allFlats = getStoredFlats();
+    const buildingFlats = allFlats.filter(
+      (f) => f.building_id === selectedBuilding
+    );
+    setFlats(buildingFlats);
+    setSelectedFlat(flat.id);
+    setNewFlatNumber('');
+    setShowAddFlatDialog(false);
+    toast.success('Flat added successfully');
   };
 
-  const filteredFlats = flats.filter(flat => 
+  const filteredFlats = flats.filter((flat) =>
     flat.flat_number.toLowerCase().includes(flatSearch.toLowerCase())
   );
 
