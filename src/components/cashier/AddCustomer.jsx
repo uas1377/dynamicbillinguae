@@ -3,18 +3,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import BuildingFlatSelector from "@/components/ui/BuildingFlatSelector";
 
 const AddCustomer = () => {
   const [customer, setCustomer] = useState({
     name: '',
     phone: '',
-    email: '',
-    address: ''
+    email: ''
   });
+  const [selectedBuilding, setSelectedBuilding] = useState('');
+  const [selectedFlat, setSelectedFlat] = useState('');
+  const [buildings, setBuildings] = useState([]);
+  const [flats, setFlats] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,21 +27,30 @@ const AddCustomer = () => {
       return;
     }
     
-    if (!customer.phone.trim()) {
-      toast.error('Phone number is required');
+    if (!selectedBuilding) {
+      toast.error('Please select a building');
+      return;
+    }
+    
+    if (!selectedFlat) {
+      toast.error('Please select a flat');
       return;
     }
 
     try {
-      // Check if phone number already exists
+      const building = buildings.find(b => b.id === selectedBuilding);
+      const flat = flats.find(f => f.id === selectedFlat);
+
+      // Check if customer already exists in this flat
       const { data: existingCustomer } = await supabase
         .from('customers')
         .select('id')
-        .eq('phone', customer.phone.trim())
+        .eq('building_id', selectedBuilding)
+        .eq('flat_id', selectedFlat)
         .single();
 
       if (existingCustomer) {
-        toast.error('Customer with this phone number already exists');
+        toast.error('A customer already exists for this flat');
         return;
       }
 
@@ -46,9 +58,11 @@ const AddCustomer = () => {
         .from('customers')
         .insert({
           name: customer.name.trim(),
-          phone: customer.phone.trim(),
+          phone: customer.phone.trim() || null,
           email: customer.email.trim() || null,
-          address: customer.address.trim() || null
+          building_id: selectedBuilding,
+          flat_id: selectedFlat,
+          address: `${building?.name || ''}, Flat ${flat?.flat_number || ''}`
         });
 
       if (error) {
@@ -57,18 +71,25 @@ const AddCustomer = () => {
       }
       
       toast.success('Customer added successfully');
-      setCustomer({ name: '', phone: '', email: '', address: '' });
+      setCustomer({ name: '', phone: '', email: '' });
+      setSelectedBuilding('');
+      setSelectedFlat('');
     } catch (error) {
       // If no existing customer found, that's fine, continue with creation
       if (error.code === 'PGRST116') {
         try {
+          const building = buildings.find(b => b.id === selectedBuilding);
+          const flat = flats.find(f => f.id === selectedFlat);
+
           const { error: insertError } = await supabase
             .from('customers')
             .insert({
               name: customer.name.trim(),
-              phone: customer.phone.trim(),
+              phone: customer.phone.trim() || null,
               email: customer.email.trim() || null,
-              address: customer.address.trim() || null
+              building_id: selectedBuilding,
+              flat_id: selectedFlat,
+              address: `${building?.name || ''}, Flat ${flat?.flat_number || ''}`
             });
 
           if (insertError) {
@@ -77,7 +98,9 @@ const AddCustomer = () => {
           }
           
           toast.success('Customer added successfully');
-          setCustomer({ name: '', phone: '', email: '', address: '' });
+          setCustomer({ name: '', phone: '', email: '' });
+          setSelectedBuilding('');
+          setSelectedFlat('');
         } catch (insertErr) {
           toast.error('Failed to add customer: ' + insertErr.message);
         }
@@ -110,35 +133,38 @@ const AddCustomer = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number *</Label>
+              <Label htmlFor="phone">Phone Number (Optional)</Label>
               <Input
                 id="phone"
                 placeholder="Enter phone number"
                 value={customer.phone}
                 onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email (Optional)</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter email address"
-                value={customer.email}
-                onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-              />
-            </div>
-            
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="address">Address (Optional)</Label>
-              <Input
-                id="address"
-                placeholder="Enter customer address"
-                value={customer.address}
-                onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-              />
-            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <BuildingFlatSelector
+              selectedBuilding={selectedBuilding}
+              setSelectedBuilding={setSelectedBuilding}
+              selectedFlat={selectedFlat}
+              setSelectedFlat={setSelectedFlat}
+              buildings={buildings}
+              setBuildings={setBuildings}
+              flats={flats}
+              setFlats={setFlats}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email (Optional)</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="Enter email address"
+              value={customer.email}
+              onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+            />
           </div>
           
           <Button type="submit" className="gradient-primary text-white border-0 flex items-center gap-2">

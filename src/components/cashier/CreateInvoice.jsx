@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image, ArrowRight } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image, ArrowRight, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,13 +17,15 @@ import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [filteredCustomers, setFilteredCustomers] = useState([]);
-  const [customerSearch, setCustomerSearch] = useState('');
+  const [buildings, setBuildings] = useState([]);
+  const [flats, setFlats] = useState([]);
   const [productSearch, setProductSearch] = useState('');
   const [selectedProducts, setSelectedProducts] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [selectedBuilding, setSelectedBuilding] = useState('');
+  const [selectedFlat, setSelectedFlat] = useState('');
+  const [flatSearch, setFlatSearch] = useState('');
   const [taxRate, setTaxRate] = useState(0);
-  const [invoiceStatus, setInvoiceStatus] = useState('unpaid');
+  const [invoiceStatus, setInvoiceStatus] = useState('paid');
   const [discountType, setDiscountType] = useState('amount');
   const [discountValue, setDiscountValue] = useState(0);
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
@@ -39,10 +42,18 @@ const CreateInvoice = () => {
 
   useEffect(() => {
     loadData();
-    // Get cashier name from session
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     setCashierName(user.username || 'Cashier');
   }, []);
+
+  useEffect(() => {
+    if (selectedBuilding) {
+      loadFlats(selectedBuilding);
+    } else {
+      setFlats([]);
+      setSelectedFlat('');
+    }
+  }, [selectedBuilding]);
 
   // Barcode scanner listener
   useEffect(() => {
@@ -76,10 +87,11 @@ const CreateInvoice = () => {
 
   const loadData = async () => {
     try {
-      const [productsRes, customersRes, settingsRes] = await Promise.all([
+      const [productsRes, customersRes, settingsRes, buildingsRes] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single()
+        supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single(),
+        supabase.from('buildings').select('*').order('name', { ascending: true })
       ]);
 
       if (productsRes.error) {
@@ -92,7 +104,6 @@ const CreateInvoice = () => {
         toast.error('Failed to load customers: ' + customersRes.error.message);
       } else {
         setCustomers(customersRes.data || []);
-        setFilteredCustomers(customersRes.data || []);
       }
 
       if (settingsRes.data?.setting_value) {
@@ -104,23 +115,33 @@ const CreateInvoice = () => {
           logo: settingsRes.data.setting_value.logo || ''
         });
       }
+
+      if (!buildingsRes.error) {
+        setBuildings(buildingsRes.data || []);
+      }
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
     }
   };
 
-  const filterCustomers = (searchTerm) => {
-    setCustomerSearch(searchTerm);
-    if (!searchTerm.trim()) {
-      setFilteredCustomers(customers);
-      return;
+  const loadFlats = async (buildingId) => {
+    try {
+      const { data, error } = await supabase
+        .from('flats')
+        .select('*')
+        .eq('building_id', buildingId)
+        .order('flat_number', { ascending: true });
+
+      if (error) throw error;
+      setFlats(data || []);
+    } catch (error) {
+      setFlats([]);
     }
-    
-    const filtered = customers.filter(customer => 
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm)
-    );
-    setFilteredCustomers(filtered);
+  };
+
+  const getCustomerFromSelection = () => {
+    if (!selectedBuilding || !selectedFlat) return null;
+    return customers.find(c => c.building_id === selectedBuilding && c.flat_id === selectedFlat);
   };
 
   const addProductToInvoice = (product) => {
@@ -220,13 +241,15 @@ const CreateInvoice = () => {
 
     try {
       const invoiceNumber = await generateInvoiceNumber();
-      const customer = selectedCustomer ? customers.find(c => c.phone === selectedCustomer) : null;
+      const customer = getCustomerFromSelection();
+      const building = buildings.find(b => b.id === selectedBuilding);
+      const flat = flats.find(f => f.id === selectedFlat);
 
       const newInvoice = {
         invoice_number: invoiceNumber,
         customer_id: customer?.id || null,
-        customer_phone: selectedCustomer || null,
-        customer_name: customer?.name || null,
+        customer_phone: customer?.phone || null,
+        customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
         items: selectedProducts,
         sub_total: calculateSubtotal(),
         discount_type: discountType,
@@ -267,12 +290,13 @@ const CreateInvoice = () => {
       
       // Reset form
       setSelectedProducts([]);
-      setSelectedCustomer('');
-      setCustomerSearch('');
+      setSelectedBuilding('');
+      setSelectedFlat('');
+      setFlatSearch('');
       setTaxRate(0);
       setDiscountType('amount');
       setDiscountValue(0);
-      setInvoiceStatus('unpaid');
+      setInvoiceStatus('paid');
       setAmountReceived(0);
       setShowCheckoutDialog(false);
       await loadData();
@@ -288,12 +312,14 @@ const CreateInvoice = () => {
     }
     
     const invoiceNumber = await generateInvoiceNumber();
-    const customer = customers.find(c => c.phone === selectedCustomer);
+    const customer = getCustomerFromSelection();
+    const building = buildings.find(b => b.id === selectedBuilding);
+    const flat = flats.find(f => f.id === selectedFlat);
     
     const invoiceData = {
       invoiceNumber,
-      customerName: customer?.name || '',
-      customerPhone: selectedCustomer || '',
+      customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
       subTotal: calculateSubtotal().toFixed(2),
@@ -321,12 +347,14 @@ const CreateInvoice = () => {
     }
     
     const invoiceNumber = await generateInvoiceNumber();
-    const customer = customers.find(c => c.phone === selectedCustomer);
+    const customer = getCustomerFromSelection();
+    const building = buildings.find(b => b.id === selectedBuilding);
+    const flat = flats.find(f => f.id === selectedFlat);
     
     const invoiceData = {
       invoiceNumber,
-      customerName: customer?.name || '',
-      customerPhone: selectedCustomer || '',
+      customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
       subTotal: calculateSubtotal().toFixed(2),
@@ -356,6 +384,10 @@ const CreateInvoice = () => {
     setShowCheckoutDialog(true);
   };
 
+  const filteredFlats = flats.filter(flat => 
+    flat.flat_number.toLowerCase().includes(flatSearch.toLowerCase())
+  );
+
   return (
     <div className="space-y-6 pb-24">
       {/* Product Selection */}
@@ -374,7 +406,7 @@ const CreateInvoice = () => {
               onChange={(e) => setProductSearch(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[60vh] overflow-y-auto">
             {products
               .filter(product => 
                 product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -386,14 +418,12 @@ const CreateInvoice = () => {
                 className="cursor-pointer hover:shadow-md transition-shadow border"
                 onClick={() => addProductToInvoice(product)}
               >
-                <CardContent className="p-4 text-center">
-                  <div className="w-12 h-12 mx-auto mb-3 rounded-lg gradient-primary flex items-center justify-center">
-                    <ShoppingCart className="w-6 h-6 text-white" />
+                <CardContent className="p-3 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-lg gradient-primary flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground">Price: ₹{product.price}</p>
-                  <p className="text-xs text-muted-foreground">Qty: {product.quantity}</p>
-                  {product.sku && <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>}
+                  <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground">₹{product.price}</p>
                 </CardContent>
               </Card>
             ))}
@@ -411,14 +441,14 @@ const CreateInvoice = () => {
       
       {/* Fixed Bottom Navigation Bar */}
       {selectedProducts.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 p-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-base px-3 py-1">
-                {selectedProducts.length} Product{selectedProducts.length > 1 ? 's' : ''} Selected
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 p-3 sm:p-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="secondary" className="text-sm px-2 py-1">
+                {selectedProducts.length} Item{selectedProducts.length > 1 ? 's' : ''}
               </Badge>
               <span className="text-sm font-semibold">
-                Total: {formatCurrency(calculateSubtotal())}
+                {formatCurrency(calculateSubtotal())}
               </span>
             </div>
             <Button 
@@ -436,7 +466,7 @@ const CreateInvoice = () => {
       {selectedProducts.length > 0 && (
         <Card className="gradient-card shadow-soft border-0">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="w-5 h-5" />
               Selected Items ({selectedProducts.length})
             </CardTitle>
@@ -444,20 +474,19 @@ const CreateInvoice = () => {
           <CardContent>
             <div className="space-y-2">
               {selectedProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <span className="font-medium">{product.name}</span>
-                    <span className="text-muted-foreground ml-2">x{product.quantity}</span>
+                <div key={product.id} className="flex items-center justify-between p-2 sm:p-3 border rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-sm truncate block">{product.name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => updateProductQuantity(product.id, -1)}>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
                       <Minus className="w-3 h-3" />
                     </Button>
-                    <span className="w-8 text-center">{product.quantity}</span>
-                    <Button size="sm" variant="outline" onClick={() => updateProductQuantity(product.id, 1)}>
+                    <span className="w-6 text-center text-sm">{product.quantity}</span>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
                       <Plus className="w-3 h-3" />
                     </Button>
-                    <span className="ml-4 font-semibold w-20 text-right">
+                    <span className="ml-2 font-semibold text-sm w-16 text-right">
                       {formatCurrency(product.quantity * product.amount)}
                     </span>
                   </div>
@@ -468,45 +497,46 @@ const CreateInvoice = () => {
         </Card>
       )}
 
-      {/* Checkout Dialog */}
+      {/* Checkout Dialog - Mobile Friendly */}
       <Dialog open={showCheckoutDialog} onOpenChange={setShowCheckoutDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-lg">
               <FileText className="w-5 h-5" />
               Invoice Details
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Cashier Info */}
             <div className="text-sm text-muted-foreground">
               Cashier: <span className="font-semibold text-foreground">{cashierName}</span>
             </div>
 
-            {/* Products Table */}
-            <div className="border rounded-lg overflow-hidden">
+            {/* Products Table - Responsive */}
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Barcode/SKU</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-center">Qty</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-xs">Product</TableHead>
+                    <TableHead className="text-center text-xs w-24">Qty</TableHead>
+                    <TableHead className="text-right text-xs w-20">Rate</TableHead>
+                    <TableHead className="text-right text-xs w-20">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {selectedProducts.map((product) => (
                     <TableRow key={product.id}>
-                      <TableCell className="font-mono text-xs">{product.barcode || product.sku || '-'}</TableCell>
-                      <TableCell>{product.name}</TableCell>
+                      <TableCell className="text-xs">
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-muted-foreground text-[10px]">{product.barcode || product.sku || '-'}</div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
                           <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="w-8 text-center">{product.quantity}</span>
+                          <span className="w-6 text-center text-xs">{product.quantity}</span>
                           <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
                             <Plus className="w-3 h-3" />
                           </Button>
@@ -517,12 +547,12 @@ const CreateInvoice = () => {
                           type="number"
                           value={product.amount}
                           onChange={(e) => updateProductAmount(product.id, e.target.value)}
-                          className="w-20 h-8 text-right ml-auto"
+                          className="w-16 h-7 text-xs text-right ml-auto"
                           min="0"
                           step="0.01"
                         />
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold text-xs">
                         {formatCurrency(product.quantity * product.amount)}
                       </TableCell>
                     </TableRow>
@@ -533,7 +563,7 @@ const CreateInvoice = () => {
 
             {/* Subtotal and Total */}
             <div className="flex justify-end">
-              <div className="w-64 space-y-2">
+              <div className="w-full sm:w-64 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span>
@@ -550,163 +580,169 @@ const CreateInvoice = () => {
                     <span className="font-semibold">{formatCurrency(calculateTax())}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
+                <div className="flex justify-between text-base font-bold border-t pt-2">
                   <span>Total:</span>
                   <span className="text-primary">{formatCurrency(calculateTotal())}</span>
                 </div>
               </div>
             </div>
 
-            {/* Customer, Tax, Discount Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer">Customer (Optional)</Label>
-                <div className="relative">
-                  <Input
-                    placeholder="Search customer by name or phone..."
-                    value={customerSearch}
-                    onChange={(e) => filterCustomers(e.target.value)}
-                    className="mb-2"
-                  />
-                  {customerSearch && filteredCustomers.length > 0 && (
-                    <div className="absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                      {filteredCustomers.map((customer) => (
-                        <div
-                          key={customer.id}
-                          className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                          onClick={() => {
-                            setSelectedCustomer(customer.phone);
-                            setCustomerSearch(`${customer.name} - ${customer.phone}`);
-                            setFilteredCustomers([]);
-                          }}
-                        >
-                          <div className="font-medium">{customer.name}</div>
-                          <div className="text-sm text-muted-foreground">{customer.phone}</div>
-                        </div>
+            {/* Customer Selection - Building/Flat */}
+            <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+              <Label className="text-sm font-semibold">Customer (Optional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1 text-xs">
+                    <Building2 className="w-3 h-3" />
+                    Building
+                  </Label>
+                  <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select building" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {buildings.map((building) => (
+                        <SelectItem key={building.id} value={building.id}>
+                          {building.name}
+                        </SelectItem>
                       ))}
-                    </div>
-                  )}
-                  {!customerSearch && (
-                    <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Or select from dropdown" />
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1 text-xs">
+                    <Home className="w-3 h-3" />
+                    Flat
+                  </Label>
+                  <div className="space-y-1">
+                    <Input
+                      placeholder="Search flat..."
+                      value={flatSearch}
+                      onChange={(e) => setFlatSearch(e.target.value)}
+                      disabled={!selectedBuilding}
+                      className="h-8 text-xs"
+                    />
+                    <Select 
+                      value={selectedFlat} 
+                      onValueChange={setSelectedFlat}
+                      disabled={!selectedBuilding}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder={selectedBuilding ? "Select flat" : "Select building first"} />
                       </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.phone}>
-                            {customer.name} - {customer.phone}
+                      <SelectContent className="bg-background z-50 max-h-40">
+                        {filteredFlats.map((flat) => (
+                          <SelectItem key={flat.id} value={flat.id}>
+                            {flat.flat_number}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
+                  </div>
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="tax">Tax Rate (%)</Label>
+            </div>
+            
+            {/* Tax and Discount */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Tax Rate (%)</Label>
                 <Input
-                  id="tax"
                   type="number"
-                  placeholder="Enter tax rate"
+                  placeholder="0"
                   value={taxRate}
                   onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
                   min="0"
                   max="100"
                   step="0.1"
+                  className="h-9"
                 />
               </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="discountType">Discount Type</Label>
+              
+              <div className="space-y-1">
+                <Label className="text-xs">Discount Type</Label>
                 <Select value={discountType} onValueChange={setDiscountType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select discount type" />
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background">
                     <SelectItem value="amount">Amount</SelectItem>
                     <SelectItem value="percentage">Percentage</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="discountValue">
-                  Discount {discountType === 'percentage' ? '(%)' : `(${formatCurrency(0).replace(/[\d.,]/g, '')})`}
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  Discount {discountType === 'percentage' ? '(%)' : '(₹)'}
                 </Label>
                 <Input
-                  id="discountValue"
                   type="number"
-                  placeholder={`Enter ${discountType === 'percentage' ? 'percentage' : 'amount'}`}
+                  placeholder="0"
                   value={discountValue}
                   onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
                   min="0"
                   max={discountType === 'percentage' ? "100" : undefined}
-                  step={discountType === 'percentage' ? "0.1" : "0.01"}
+                  className="h-9"
                 />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Discount Amount</Label>
-                <div className="p-3 bg-muted rounded-md">
-                  <span className="font-semibold">{formatCurrency(calculateDiscount())}</span>
-                </div>
               </div>
             </div>
 
             {/* Amount Received and Change */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-              <div className="space-y-2">
-                <Label htmlFor="amountReceived" className="text-lg font-semibold">Amount Received</Label>
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold">Amount Received</Label>
                 <Input
-                  id="amountReceived"
                   type="number"
-                  placeholder="Enter amount received"
+                  placeholder="0"
                   value={amountReceived}
                   onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
                   min="0"
                   step="0.01"
-                  className="text-lg h-12"
+                  className="h-10 text-base"
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label className="text-lg font-semibold">Change to Give</Label>
-                <div className="p-3 bg-background rounded-md border-2 border-primary h-12 flex items-center">
-                  <span className="text-2xl font-bold text-primary">{formatCurrency(calculateChange())}</span>
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold">Change to Give</Label>
+                <div className="p-2 bg-background rounded-md border-2 border-primary h-10 flex items-center">
+                  <span className="text-lg font-bold text-primary">{formatCurrency(calculateChange())}</span>
                 </div>
               </div>
             </div>
 
-            {/* Status and Actions */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-              <div className="flex items-center gap-4">
-                <Button
-                  onClick={() => setInvoiceStatus(invoiceStatus === 'paid' ? 'unpaid' : 'paid')}
-                  variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}
-                >
-                  {invoiceStatus === 'paid' ? 'Paid' : 'Unpaid'}
-                </Button>
+            {/* Paid/Unpaid Switch */}
+            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-semibold">Payment Status</Label>
                 <Badge variant={invoiceStatus === 'paid' ? 'default' : 'destructive'}>
                   {invoiceStatus.toUpperCase()}
                 </Badge>
               </div>
-              
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <Button onClick={printInvoice} variant="outline" className="flex items-center gap-2">
-                  <Printer className="w-4 h-4" />
-                  Print
-                </Button>
-                <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center gap-2">
-                  <Image className="w-4 h-4" />
-                  Save as Image
-                </Button>
-                <Button onClick={saveInvoice} className="gradient-primary text-white border-0">
-                  Save Invoice
-                </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Unpaid</span>
+                <Switch
+                  checked={invoiceStatus === 'paid'}
+                  onCheckedChange={(checked) => setInvoiceStatus(checked ? 'paid' : 'unpaid')}
+                />
+                <span className="text-xs text-muted-foreground">Paid</span>
               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              <Button onClick={printInvoice} variant="outline" className="flex items-center justify-center gap-1 h-10">
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">Print</span>
+              </Button>
+              <Button onClick={saveAsImageHandler} variant="outline" className="flex items-center justify-center gap-1 h-10">
+                <Image className="w-4 h-4" />
+                <span className="hidden sm:inline">Image</span>
+              </Button>
+              <Button onClick={saveInvoice} className="gradient-primary text-white border-0 h-10">
+                Save
+              </Button>
             </div>
           </div>
         </DialogContent>
