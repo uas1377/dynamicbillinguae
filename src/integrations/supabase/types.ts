@@ -10,148 +10,201 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
       admin_settings: {
         Row: {
-          created_at: string
+          created_at: string | null
           id: string
           setting_key: string
-          setting_value: Json
-          updated_at: string
+          setting_value: Json | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           id?: string
           setting_key: string
-          setting_value: Json
-          updated_at?: string
+          setting_value?: Json | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           id?: string
           setting_key?: string
-          setting_value?: Json
-          updated_at?: string
+          setting_value?: Json | null
+          updated_at?: string | null
         }
         Relationships: []
       }
-      cashiers: {
+      buildings: {
         Row: {
-          created_at: string
+          created_at: string | null
           id: string
-          name: string | null
-          password: string
-          updated_at: string
-          username: string
+          name: string
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           id?: string
-          name?: string | null
-          password: string
-          updated_at?: string
-          username: string
+          name: string
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           id?: string
-          name?: string | null
-          password?: string
-          updated_at?: string
-          username?: string
+          name?: string
         }
         Relationships: []
       }
       customers: {
         Row: {
           address: string | null
-          created_at: string
+          building_id: string | null
+          created_at: string | null
           email: string | null
+          flat_id: string | null
           id: string
           name: string
-          phone: string
-          updated_at: string
+          phone: string | null
+          updated_at: string | null
         }
         Insert: {
           address?: string | null
-          created_at?: string
+          building_id?: string | null
+          created_at?: string | null
           email?: string | null
+          flat_id?: string | null
           id?: string
           name: string
-          phone: string
-          updated_at?: string
+          phone?: string | null
+          updated_at?: string | null
         }
         Update: {
           address?: string | null
-          created_at?: string
+          building_id?: string | null
+          created_at?: string | null
           email?: string | null
+          flat_id?: string | null
           id?: string
           name?: string
-          phone?: string
-          updated_at?: string
+          phone?: string | null
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_flat_id_fkey"
+            columns: ["flat_id"]
+            isOneToOne: false
+            referencedRelation: "flats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flats: {
+        Row: {
+          building_id: string
+          created_at: string | null
+          flat_number: string
+          id: string
+          phone: string | null
+        }
+        Insert: {
+          building_id: string
+          created_at?: string | null
+          flat_number: string
+          id?: string
+          phone?: string | null
+        }
+        Update: {
+          building_id?: string
+          created_at?: string | null
+          flat_number?: string
+          id?: string
+          phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flats_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoices: {
         Row: {
-          created_at: string
+          amount_received: number | null
+          cashier_name: string | null
+          change_amount: number | null
+          created_at: string | null
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
-          date: string
+          date: string | null
           discount_amount: number | null
           discount_type: string | null
           discount_value: number | null
-          grand_total: number
+          grand_total: number | null
           id: string
           invoice_number: string
-          items: Json
+          items: Json | null
           status: string | null
-          sub_total: number
+          sub_total: number | null
           tax_amount: number | null
           tax_rate: number | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          amount_received?: number | null
+          cashier_name?: string | null
+          change_amount?: number | null
+          created_at?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          date?: string
+          date?: string | null
           discount_amount?: number | null
           discount_type?: string | null
           discount_value?: number | null
-          grand_total: number
+          grand_total?: number | null
           id?: string
           invoice_number: string
-          items: Json
+          items?: Json | null
           status?: string | null
-          sub_total: number
+          sub_total?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          amount_received?: number | null
+          cashier_name?: string | null
+          change_amount?: number | null
+          created_at?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          date?: string
+          date?: string | null
           discount_amount?: number | null
           discount_type?: string | null
           discount_value?: number | null
-          grand_total?: number
+          grand_total?: number | null
           id?: string
           invoice_number?: string
-          items?: Json
+          items?: Json | null
           status?: string | null
-          sub_total?: number
+          sub_total?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -167,38 +220,38 @@ export type Database = {
         Row: {
           barcode: string | null
           buying_price: number | null
-          created_at: string
+          created_at: string | null
           discount_limit: number | null
           id: string
           name: string
           price: number | null
           quantity: number | null
           sku: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           barcode?: string | null
           buying_price?: number | null
-          created_at?: string
+          created_at?: string | null
           discount_limit?: number | null
           id?: string
           name: string
           price?: number | null
           quantity?: number | null
           sku?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           barcode?: string | null
           buying_price?: number | null
-          created_at?: string
+          created_at?: string | null
           discount_limit?: number | null
           id?: string
           name?: string
           price?: number | null
           quantity?: number | null
           sku?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
