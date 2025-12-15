@@ -3,225 +3,239 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Plus, Edit, Trash2, Share2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Building2, Home, Plus, Edit, Trash2, Phone } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getStoredBuildings,
+  getStoredFlats,
+  addBuildingToStorage,
+  addFlatToStorage,
+  updateFlatPhoneInStorage,
+  setStoredBuildings,
+  setStoredFlats,
+} from "@/utils/buildingFlatStorage";
 
 const CustomerManagement = () => {
-  const [customers, setCustomers] = useState([]);
-  const [editingCustomer, setEditingCustomer] = useState(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    address: ''
+  const [buildings, setBuildings] = useState([]);
+  const [allFlats, setAllFlats] = useState([]);
+  
+  // Add Building Dialog
+  const [showAddBuildingDialog, setShowAddBuildingDialog] = useState(false);
+  const [newBuildingName, setNewBuildingName] = useState('');
+  
+  // Add/Edit Flat Dialog
+  const [showFlatDialog, setShowFlatDialog] = useState(false);
+  const [editingFlat, setEditingFlat] = useState(null);
+  const [flatForm, setFlatForm] = useState({
+    building_id: '',
+    flat_number: '',
+    phone: ''
   });
 
   useEffect(() => {
-    loadCustomers();
+    loadData();
   }, []);
 
-  const loadCustomers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast.error('Failed to load customers: ' + error.message);
-        return;
-      }
-
-      setCustomers(data || []);
-    } catch (error) {
-      toast.error('Failed to load customers: ' + error.message);
-    }
+  const loadData = () => {
+    const storedBuildings = getStoredBuildings();
+    const storedFlats = getStoredFlats();
+    setBuildings(storedBuildings);
+    setAllFlats(storedFlats);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      toast.error('Customer name is required');
-      return;
-    }
-    
-    if (!formData.phone.trim()) {
-      toast.error('Phone number is required');
+  const handleAddBuilding = () => {
+    if (!newBuildingName.trim()) {
+      toast.error('Building name is required');
       return;
     }
 
-    try {
-      // Check if phone number already exists (excluding current customer when editing)
-      const { data: existingCustomers, error } = await supabase
-        .from('customers')
-        .select('id, phone')
-        .eq('phone', formData.phone.trim());
-
-      if (error) {
-        toast.error('Failed to validate phone: ' + error.message);
-        return;
-      }
-
-      const duplicatePhone = existingCustomers?.find(c => c.id !== editingCustomer?.id);
-      if (duplicatePhone) {
-        toast.error('Customer with this phone number already exists');
-        return;
-      }
-
-      const customerData = {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim() || null,
-        address: formData.address.trim() || null
-      };
-
-      if (editingCustomer) {
-        const { error } = await supabase
-          .from('customers')
-          .update(customerData)
-          .eq('id', editingCustomer.id);
-
-        if (error) {
-          toast.error('Failed to update customer: ' + error.message);
-          return;
-        }
-        toast.success('Customer updated successfully');
-      } else {
-        const { error } = await supabase
-          .from('customers')
-          .insert(customerData);
-
-        if (error) {
-          toast.error('Failed to add customer: ' + error.message);
-          return;
-        }
-        toast.success('Customer added successfully');
-      }
-
-      await loadCustomers();
-      closeDialog();
-    } catch (error) {
-      toast.error('Failed to save customer: ' + error.message);
-    }
+    const building = addBuildingToStorage(newBuildingName.trim());
+    setBuildings([...buildings, building]);
+    setNewBuildingName('');
+    setShowAddBuildingDialog(false);
+    toast.success('Building added successfully');
   };
 
-  const openDialog = (customer = null) => {
-    setEditingCustomer(customer);
-    setFormData({
-      name: customer?.name || '',
-      phone: customer?.phone || '',
-      email: customer?.email || '',
-      address: customer?.address || ''
+  const handleDeleteBuilding = (buildingId) => {
+    const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
+    if (buildingFlats.length > 0) {
+      toast.error('Cannot delete building with flats. Delete flats first.');
+      return;
+    }
+    
+    const updatedBuildings = buildings.filter(b => b.id !== buildingId);
+    setStoredBuildings(updatedBuildings);
+    setBuildings(updatedBuildings);
+    toast.success('Building deleted');
+  };
+
+  const openFlatDialog = (flat = null, buildingId = '') => {
+    setEditingFlat(flat);
+    setFlatForm({
+      building_id: flat?.building_id || buildingId,
+      flat_number: flat?.flat_number || '',
+      phone: flat?.phone || ''
     });
-    setIsDialogOpen(true);
+    setShowFlatDialog(true);
   };
 
-  const closeDialog = () => {
-    setIsDialogOpen(false);
-    setEditingCustomer(null);
-    setFormData({ name: '', phone: '', email: '', address: '' });
-  };
-
-  const deleteCustomer = async (customerId) => {
-    try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', customerId);
-
-      if (error) {
-        toast.error('Failed to delete customer: ' + error.message);
-        return;
-      }
-
-      toast.success('Customer deleted successfully');
-      await loadCustomers();
-    } catch (error) {
-      toast.error('Failed to delete customer: ' + error.message);
+  const handleSaveFlat = () => {
+    if (!flatForm.building_id) {
+      toast.error('Please select a building');
+      return;
     }
-  };
-
-  const shareCustomerLink = (customer) => {
-    const shareUrl = `${window.location.origin}/customer?phone=${encodeURIComponent(customer.phone)}`;
     
-    if (navigator.share) {
-      navigator.share({
-        title: `Customer Access for ${customer.name}`,
-        text: `Direct link to view invoices for ${customer.name}`,
-        url: shareUrl,
-      });
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      toast.success('Customer link copied to clipboard!');
+    if (!flatForm.flat_number.trim()) {
+      toast.error('Flat number is required');
+      return;
     }
+
+    if (editingFlat) {
+      // Update existing flat
+      const updatedFlats = allFlats.map(f => 
+        f.id === editingFlat.id 
+          ? { ...f, flat_number: flatForm.flat_number.trim(), phone: flatForm.phone.trim() || null }
+          : f
+      );
+      setStoredFlats(updatedFlats);
+      setAllFlats(updatedFlats);
+      toast.success('Flat updated successfully');
+    } else {
+      // Add new flat
+      const flat = addFlatToStorage(flatForm.building_id, flatForm.flat_number.trim());
+      if (flatForm.phone.trim()) {
+        updateFlatPhoneInStorage(flat.id, flatForm.phone.trim());
+      }
+      loadData();
+      toast.success('Flat added successfully');
+    }
+
+    setShowFlatDialog(false);
+    setEditingFlat(null);
+    setFlatForm({ building_id: '', flat_number: '', phone: '' });
+  };
+
+  const handleDeleteFlat = (flatId) => {
+    const updatedFlats = allFlats.filter(f => f.id !== flatId);
+    setStoredFlats(updatedFlats);
+    setAllFlats(updatedFlats);
+    toast.success('Flat deleted');
+  };
+
+  const getBuildingName = (buildingId) => {
+    return buildings.find(b => b.id === buildingId)?.name || 'Unknown';
   };
 
   return (
     <div className="space-y-6">
+      {/* Buildings Section */}
       <Card className="gradient-card shadow-soft border-0">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Customer Management ({customers.length} customers)
+            <Building2 className="w-5 h-5" />
+            Buildings ({buildings.length})
           </CardTitle>
-          <Button onClick={() => openDialog()} className="gradient-primary text-white border-0 flex items-center gap-2">
+          <Button 
+            onClick={() => setShowAddBuildingDialog(true)} 
+            className="gradient-primary text-white border-0 flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" />
-            Add Customer
+            Add Building
           </Button>
         </CardHeader>
         <CardContent>
-          {customers.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-xl font-semibold mb-2">No Customers Found</p>
-              <p className="text-muted-foreground">Start by adding your first customer to the system.</p>
+          {buildings.length === 0 ? (
+            <div className="text-center py-8">
+              <Building2 className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-lg font-semibold mb-1">No Buildings</p>
+              <p className="text-muted-foreground text-sm">Add your first building to get started.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
-              {customers.map((customer) => (
-                <Card key={customer.id} className="border shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{customer.name}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mt-2 text-sm text-muted-foreground">
-                          <p>Phone: {customer.phone}</p>
-                          {customer.email && <p>Email: {customer.email}</p>}
-                          {customer.address && <p>Address: {customer.address}</p>}
-                        </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {buildings.map((building) => {
+                const buildingFlats = allFlats.filter(f => f.building_id === building.id);
+                return (
+                  <Card key={building.id} className="border shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold">{building.name}</h3>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteBuilding(building.id)}
+                          className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      
-                      <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {buildingFlats.length} flat{buildingFlats.length !== 1 ? 's' : ''}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openFlatDialog(null, building.id)}
+                        className="w-full flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Flat
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Flats Section */}
+      <Card className="gradient-card shadow-soft border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Home className="w-5 h-5" />
+            All Flats/Houses ({allFlats.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {allFlats.length === 0 ? (
+            <div className="text-center py-8">
+              <Home className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-lg font-semibold mb-1">No Flats</p>
+              <p className="text-muted-foreground text-sm">Add buildings first, then add flats.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {allFlats.map((flat) => (
+                <Card key={flat.id} className="border shadow-sm">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">{getBuildingName(flat.building_id)} - Flat {flat.flat_number}</p>
+                        {flat.phone && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {flat.phone}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => shareCustomerLink(customer)}
-                          className="flex items-center gap-1"
+                          variant="ghost"
+                          onClick={() => openFlatDialog(flat)}
+                          className="h-7 w-7 p-0"
                         >
-                          <Share2 className="w-3 h-3" />
-                          Share
+                          <Edit className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => openDialog(customer)}
-                          className="flex items-center gap-1"
+                          variant="ghost"
+                          onClick={() => handleDeleteFlat(flat.id)}
+                          className="text-destructive hover:text-destructive h-7 w-7 p-0"
                         >
-                          <Edit className="w-3 h-3" />
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deleteCustomer(customer.id)}
-                          className="flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
@@ -233,68 +247,80 @@ const CustomerManagement = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="gradient-card border-0">
+      {/* Add Building Dialog */}
+      <Dialog open={showAddBuildingDialog} onOpenChange={setShowAddBuildingDialog}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
-            </DialogTitle>
+            <DialogTitle>Add New Building</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Customer Name *</Label>
-                <Input
-                  id="name"
-                  placeholder="Enter customer name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number *</Label>
-                <Input
-                  id="phone"
-                  placeholder="Enter phone number"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email (Optional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter email address"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="address">Address (Optional)</Label>
-                <Input
-                  id="address"
-                  placeholder="Enter customer address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                />
-              </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Building Name *</Label>
+              <Input
+                placeholder="Enter building name"
+                value={newBuildingName}
+                onChange={(e) => setNewBuildingName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddBuilding()}
+              />
             </div>
-            
-            <div className="flex gap-3 justify-end">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" className="gradient-primary text-white border-0">
-                {editingCustomer ? 'Update Customer' : 'Add Customer'}
-              </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddBuildingDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddBuilding} className="gradient-primary text-white border-0">
+              Add Building
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add/Edit Flat Dialog */}
+      <Dialog open={showFlatDialog} onOpenChange={setShowFlatDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editingFlat ? 'Edit Flat' : 'Add New Flat'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Building *</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={flatForm.building_id}
+                onChange={(e) => setFlatForm({ ...flatForm, building_id: e.target.value })}
+                disabled={!!editingFlat}
+              >
+                <option value="">Select building</option>
+                {buildings.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
             </div>
-          </form>
+            <div className="space-y-2">
+              <Label>Flat/House Number *</Label>
+              <Input
+                placeholder="e.g., 101, A-201, House 5"
+                value={flatForm.flat_number}
+                onChange={(e) => setFlatForm({ ...flatForm, flat_number: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number (Optional)</Label>
+              <Input
+                placeholder="Enter phone number"
+                value={flatForm.phone}
+                onChange={(e) => setFlatForm({ ...flatForm, phone: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFlatDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveFlat} className="gradient-primary text-white border-0">
+              {editingFlat ? 'Update' : 'Add Flat'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

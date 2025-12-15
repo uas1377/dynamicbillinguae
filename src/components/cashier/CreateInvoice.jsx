@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image, ArrowRight, Building2, Home } from "lucide-react";
@@ -13,6 +13,12 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
+import {
+  getStoredBuildings,
+  getStoredFlats,
+  addBuildingToStorage,
+  addFlatToStorage,
+} from "@/utils/buildingFlatStorage";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
@@ -39,16 +45,23 @@ const CreateInvoice = () => {
     email: '',
     logo: ''
   });
+  
+  // Add Building/Flat dialogs
+  const [showAddBuildingDialog, setShowAddBuildingDialog] = useState(false);
+  const [showAddFlatDialog, setShowAddFlatDialog] = useState(false);
+  const [newBuildingName, setNewBuildingName] = useState('');
+  const [newFlatNumber, setNewFlatNumber] = useState('');
 
   useEffect(() => {
     loadData();
+    loadLocalData();
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     setCashierName(user.username || 'Cashier');
   }, []);
 
   useEffect(() => {
     if (selectedBuilding) {
-      loadFlats(selectedBuilding);
+      loadFlatsForBuilding(selectedBuilding);
     } else {
       setFlats([]);
       setSelectedFlat('');
@@ -87,11 +100,10 @@ const CreateInvoice = () => {
 
   const loadData = async () => {
     try {
-      const [productsRes, customersRes, settingsRes, buildingsRes] = await Promise.all([
+      const [productsRes, customersRes, settingsRes] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single(),
-        supabase.from('buildings').select('*').order('name', { ascending: true })
       ]);
 
       if (productsRes.error) {
@@ -115,28 +127,50 @@ const CreateInvoice = () => {
           logo: settingsRes.data.setting_value.logo || ''
         });
       }
-
-      if (!buildingsRes.error) {
-        setBuildings(buildingsRes.data || []);
-      }
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
     }
   };
 
-  const loadFlats = async (buildingId) => {
-    try {
-      const { data, error } = await supabase
-        .from('flats')
-        .select('*')
-        .eq('building_id', buildingId)
-        .order('flat_number', { ascending: true });
+  const loadLocalData = () => {
+    const storedBuildings = getStoredBuildings();
+    setBuildings(storedBuildings);
+  };
 
-      if (error) throw error;
-      setFlats(data || []);
-    } catch (error) {
-      setFlats([]);
+  const loadFlatsForBuilding = (buildingId) => {
+    const allFlats = getStoredFlats();
+    const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
+    setFlats(buildingFlats);
+  };
+
+  const handleAddBuilding = () => {
+    if (!newBuildingName.trim()) {
+      toast.error('Building name is required');
+      return;
     }
+    const building = addBuildingToStorage(newBuildingName.trim());
+    setBuildings([...buildings, building]);
+    setSelectedBuilding(building.id);
+    setNewBuildingName('');
+    setShowAddBuildingDialog(false);
+    toast.success('Building added');
+  };
+
+  const handleAddFlat = () => {
+    if (!newFlatNumber.trim()) {
+      toast.error('Flat number is required');
+      return;
+    }
+    if (!selectedBuilding) {
+      toast.error('Select a building first');
+      return;
+    }
+    const flat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
+    loadFlatsForBuilding(selectedBuilding);
+    setSelectedFlat(flat.id);
+    setNewFlatNumber('');
+    setShowAddFlatDialog(false);
+    toast.success('Flat added');
   };
 
   const getCustomerFromSelection = () => {
@@ -173,15 +207,15 @@ const CreateInvoice = () => {
     setSelectedProducts(updatedProducts);
   };
 
-  const updateProductAmount = (productId, amount) => {
-    const updatedProducts = selectedProducts.map(product => {
-      if (product.id === productId) {
-        return { ...product, amount: parseFloat(amount) || 0 };
-      }
-      return product;
-    });
-    
-    setSelectedProducts(updatedProducts);
+  const updateProductQuantityDirect = (productId, quantity) => {
+    const newQuantity = Math.max(0, parseInt(quantity) || 0);
+    if (newQuantity === 0) {
+      setSelectedProducts(selectedProducts.filter(p => p.id !== productId));
+    } else {
+      setSelectedProducts(selectedProducts.map(product => 
+        product.id === productId ? { ...product, quantity: newQuantity } : product
+      ));
+    }
   };
 
   const calculateSubtotal = () => {
@@ -519,7 +553,7 @@ const CreateInvoice = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Product</TableHead>
-                    <TableHead className="text-center text-xs w-24">Qty</TableHead>
+                    <TableHead className="text-center text-xs w-28">Qty</TableHead>
                     <TableHead className="text-right text-xs w-20">Rate</TableHead>
                     <TableHead className="text-right text-xs w-20">Amount</TableHead>
                   </TableRow>
@@ -536,21 +570,20 @@ const CreateInvoice = () => {
                           <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="w-6 text-center text-xs">{product.quantity}</span>
+                          <Input
+                            type="number"
+                            value={product.quantity}
+                            onChange={(e) => updateProductQuantityDirect(product.id, e.target.value)}
+                            className="w-12 h-6 text-xs text-center p-1"
+                            min="1"
+                          />
                           <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
                             <Plus className="w-3 h-3" />
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Input
-                          type="number"
-                          value={product.amount}
-                          onChange={(e) => updateProductAmount(product.id, e.target.value)}
-                          className="w-16 h-7 text-xs text-right ml-auto"
-                          min="0"
-                          step="0.01"
-                        />
+                      <TableCell className="text-right text-xs">
+                        {formatCurrency(product.amount)}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-xs">
                         {formatCurrency(product.quantity * product.amount)}
@@ -596,18 +629,29 @@ const CreateInvoice = () => {
                     <Building2 className="w-3 h-3" />
                     Building
                   </Label>
-                  <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Select building" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      {buildings.map((building) => (
-                        <SelectItem key={building.id} value={building.id}>
-                          {building.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-1">
+                    <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+                      <SelectTrigger className="h-9 flex-1">
+                        <SelectValue placeholder="Select building" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        {buildings.map((building) => (
+                          <SelectItem key={building.id} value={building.id}>
+                            {building.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => setShowAddBuildingDialog(true)}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -623,22 +667,34 @@ const CreateInvoice = () => {
                       disabled={!selectedBuilding}
                       className="h-8 text-xs"
                     />
-                    <Select 
-                      value={selectedFlat} 
-                      onValueChange={setSelectedFlat}
-                      disabled={!selectedBuilding}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder={selectedBuilding ? "Select flat" : "Select building first"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background z-50 max-h-40">
-                        {filteredFlats.map((flat) => (
-                          <SelectItem key={flat.id} value={flat.id}>
-                            {flat.flat_number}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-1">
+                      <Select 
+                        value={selectedFlat} 
+                        onValueChange={setSelectedFlat}
+                        disabled={!selectedBuilding}
+                      >
+                        <SelectTrigger className="h-9 flex-1">
+                          <SelectValue placeholder={selectedBuilding ? "Select flat" : "Select building first"} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50 max-h-40">
+                          {filteredFlats.map((flat) => (
+                            <SelectItem key={flat.id} value={flat.id}>
+                              {flat.flat_number}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => setShowAddFlatDialog(true)}
+                        disabled={!selectedBuilding}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -745,6 +801,62 @@ const CreateInvoice = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Building Dialog */}
+      <Dialog open={showAddBuildingDialog} onOpenChange={setShowAddBuildingDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add New Building</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Building Name</Label>
+              <Input
+                placeholder="Enter building name"
+                value={newBuildingName}
+                onChange={(e) => setNewBuildingName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddBuilding()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddBuildingDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddBuilding} className="gradient-primary text-white border-0">
+              Add Building
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Flat Dialog */}
+      <Dialog open={showAddFlatDialog} onOpenChange={setShowAddFlatDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add New Flat</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Flat Number</Label>
+              <Input
+                placeholder="Enter flat number (e.g., 101, A-201)"
+                value={newFlatNumber}
+                onChange={(e) => setNewFlatNumber(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddFlat()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddFlatDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddFlat} className="gradient-primary text-white border-0">
+              Add Flat
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
