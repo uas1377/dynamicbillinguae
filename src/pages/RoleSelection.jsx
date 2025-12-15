@@ -4,15 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, ShoppingCart, Shield, Phone } from "lucide-react";
+import { User, ShoppingCart, Shield, KeyRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getFlatByUserId, getStoredBuildings } from "@/utils/buildingFlatStorage";
 
 const RoleSelection = () => {
   const [loginModal, setLoginModal] = useState(null);
-  const [credentials, setCredentials] = useState({ username: '', password: '', phone: '' });
+  const [credentials, setCredentials] = useState({ username: '', password: '', userId: '' });
   const [defaultPanel, setDefaultPanel] = useState(null);
   const navigate = useNavigate();
 
@@ -34,11 +34,29 @@ const RoleSelection = () => {
 
   const handleLogin = async (role) => {
     if (role === 'customer') {
-      if (!credentials.phone) {
-        toast.error('Please enter phone number');
+      if (!credentials.userId.trim()) {
+        toast.error('Please enter your User ID');
         return;
       }
-      sessionStorage.setItem('currentUser', JSON.stringify({ role: 'customer', phone: credentials.phone }));
+      
+      // Find flat by user ID
+      const flat = getFlatByUserId(credentials.userId.trim().toUpperCase());
+      if (!flat) {
+        toast.error('Invalid User ID. Please check and try again.');
+        return;
+      }
+      
+      const buildings = getStoredBuildings();
+      const building = buildings.find(b => b.id === flat.building_id);
+      
+      sessionStorage.setItem('currentUser', JSON.stringify({ 
+        role: 'customer', 
+        userId: flat.user_id,
+        flatId: flat.id,
+        flatNumber: flat.flat_number,
+        buildingName: building?.name || '',
+        phone: flat.phone 
+      }));
       navigate('/customer');
     } else {
       try {
@@ -84,7 +102,7 @@ const RoleSelection = () => {
             sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
             navigate('/cashier');
             setLoginModal(null);
-            setCredentials({ username: '', password: '', phone: '' });
+            setCredentials({ username: '', password: '', userId: '' });
             return;
           }
         }
@@ -97,7 +115,7 @@ const RoleSelection = () => {
       }
     }
     setLoginModal(null);
-    setCredentials({ username: '', password: '', phone: '' });
+    setCredentials({ username: '', password: '', userId: '' });
   };
 
   const openModal = (role) => {
@@ -108,7 +126,7 @@ const RoleSelection = () => {
       return;
     }
     setLoginModal(role);
-    setCredentials({ username: '', password: '', phone: '' });
+    setCredentials({ username: '', password: '', userId: '' });
   };
 
   return (
@@ -183,17 +201,21 @@ const RoleSelection = () => {
           <div className="space-y-4">
             {loginModal === 'customer' ? (
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="userId">User ID</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="phone"
-                    placeholder="Enter your phone number"
-                    value={credentials.phone}
-                    onChange={(e) => setCredentials({ ...credentials, phone: e.target.value })}
-                    className="pl-10"
+                    id="userId"
+                    placeholder="Enter your 6-character User ID"
+                    value={credentials.userId}
+                    onChange={(e) => setCredentials({ ...credentials, userId: e.target.value.toUpperCase() })}
+                    className="pl-10 font-mono uppercase"
+                    maxLength={6}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Your User ID is printed on your receipt
+                </p>
               </div>
             ) : (
               <>

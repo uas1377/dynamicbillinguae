@@ -282,7 +282,7 @@ const CreateInvoice = () => {
       const newInvoice = {
         invoice_number: invoiceNumber,
         customer_id: customer?.id || null,
-        customer_phone: customer?.phone || null,
+        customer_phone: flat?.user_id || customer?.phone || null, // Store user_id for lookup
         customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
         items: selectedProducts,
         sub_total: calculateSubtotal(),
@@ -353,6 +353,7 @@ const CreateInvoice = () => {
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerId: flat?.user_id || '', // Pass user ID for thermal print
       customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
@@ -388,6 +389,7 @@ const CreateInvoice = () => {
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerId: flat?.user_id || '', // Pass user ID for image
       customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
