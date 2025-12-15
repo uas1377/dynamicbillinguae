@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, FileText, DollarSign, Clock, Share2, Calendar } from "lucide-react";
+import { LogOut, FileText, DollarSign, Clock, Share2, Calendar, User, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,14 +13,14 @@ const CustomerPanel = () => {
   const [customerInvoices, setCustomerInvoices] = useState([]);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const sharedPhone = searchParams.get('phone');
+  const sharedUserId = searchParams.get('id');
 
   useEffect(() => {
-    if (sharedPhone) {
+    if (sharedUserId) {
       // Direct access via shared link
-      const sharedUser = { phone: sharedPhone, role: 'customer', name: 'Customer' };
+      const sharedUser = { userId: sharedUserId, role: 'customer' };
       setCurrentUser(sharedUser);
-      loadCustomerInvoices(sharedPhone);
+      loadCustomerInvoices(sharedUserId);
     } else {
       // Regular login access
       const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
@@ -29,16 +29,17 @@ const CustomerPanel = () => {
         return;
       }
       setCurrentUser(user);
-      loadCustomerInvoices(user.phone);
+      loadCustomerInvoices(user.userId);
     }
-  }, [navigate, sharedPhone]);
+  }, [navigate, sharedUserId]);
 
-  const loadCustomerInvoices = async (customerPhone) => {
+  const loadCustomerInvoices = async (userId) => {
     try {
+      // Search by user ID stored in customer_phone field or in customer name
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
-        .eq('customer_phone', customerPhone)
+        .or(`customer_phone.eq.${userId}`)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -53,14 +54,14 @@ const CustomerPanel = () => {
   };
 
   const handleLogout = () => {
-    if (!sharedPhone) {
+    if (!sharedUserId) {
       sessionStorage.clear();
     }
     navigate('/');
   };
 
   const shareCustomerLink = () => {
-    const shareUrl = `${window.location.origin}/customer?phone=${encodeURIComponent(currentUser.phone)}`;
+    const shareUrl = `${window.location.origin}/customer?id=${encodeURIComponent(currentUser.userId)}`;
     
     if (navigator.share) {
       navigator.share({
@@ -87,9 +88,24 @@ const CustomerPanel = () => {
           <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-3xl font-bold text-primary">Customer Portal</CardTitle>
-              <p className="text-muted-foreground mt-2">
-                {sharedPhone ? `Viewing invoices for ${currentUser.phone}` : `Phone: ${currentUser.phone}`}
-              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-muted-foreground flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  User ID: <span className="font-mono font-semibold text-primary">{currentUser.userId}</span>
+                </p>
+                {currentUser.buildingName && (
+                  <p className="text-muted-foreground flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    {currentUser.buildingName}
+                    {currentUser.flatNumber && (
+                      <span className="flex items-center gap-1">
+                        <Home className="w-4 h-4" />
+                        Flat {currentUser.flatNumber}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={shareCustomerLink} variant="outline" className="flex items-center gap-2">
@@ -98,7 +114,7 @@ const CustomerPanel = () => {
               </Button>
               <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">
                 <LogOut className="w-4 h-4" />
-                {sharedPhone ? 'Back' : 'Logout'}
+                {sharedUserId ? 'Back' : 'Logout'}
               </Button>
             </div>
           </CardHeader>

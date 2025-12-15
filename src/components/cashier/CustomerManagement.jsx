@@ -4,14 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Building2, Home, Plus, Edit, Trash2, Phone } from "lucide-react";
+import { Building2, Home, Plus, Edit, Trash2, Phone, Search, FileText, ChevronDown, ChevronRight, User } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/utils/formatCurrency";
+import { supabase } from "@/integrations/supabase/client";
 import {
   getStoredBuildings,
   getStoredFlats,
   addBuildingToStorage,
   addFlatToStorage,
-  updateFlatPhoneInStorage,
+  updateFlatInStorage,
   setStoredBuildings,
   setStoredFlats,
 } from "@/utils/buildingFlatStorage";
@@ -19,6 +21,13 @@ import {
 const CustomerManagement = () => {
   const [buildings, setBuildings] = useState([]);
   const [allFlats, setAllFlats] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedBuildings, setExpandedBuildings] = useState({});
+  
+  // Invoice viewing
+  const [selectedFlat, setSelectedFlat] = useState(null);
+  const [flatInvoices, setFlatInvoices] = useState([]);
+  const [showInvoicesDialog, setShowInvoicesDialog] = useState(false);
   
   // Add Building Dialog
   const [showAddBuildingDialog, setShowAddBuildingDialog] = useState(false);
@@ -42,6 +51,18 @@ const CustomerManagement = () => {
     const storedFlats = getStoredFlats();
     setBuildings(storedBuildings);
     setAllFlats(storedFlats);
+    
+    // Expand all buildings by default
+    const expanded = {};
+    storedBuildings.forEach(b => { expanded[b.id] = true; });
+    setExpandedBuildings(expanded);
+  };
+
+  const toggleBuilding = (buildingId) => {
+    setExpandedBuildings(prev => ({
+      ...prev,
+      [buildingId]: !prev[buildingId]
+    }));
   };
 
   const handleAddBuilding = () => {
@@ -52,6 +73,7 @@ const CustomerManagement = () => {
 
     const building = addBuildingToStorage(newBuildingName.trim());
     setBuildings([...buildings, building]);
+    setExpandedBuildings(prev => ({ ...prev, [building.id]: true }));
     setNewBuildingName('');
     setShowAddBuildingDialog(false);
     toast.success('Building added successfully');
@@ -105,7 +127,7 @@ const CustomerManagement = () => {
       // Add new flat
       const flat = addFlatToStorage(flatForm.building_id, flatForm.flat_number.trim());
       if (flatForm.phone.trim()) {
-        updateFlatPhoneInStorage(flat.id, flatForm.phone.trim());
+        updateFlatInStorage(flat.id, { phone: flatForm.phone.trim() });
       }
       loadData();
       toast.success('Flat added successfully');
@@ -123,18 +145,89 @@ const CustomerManagement = () => {
     toast.success('Flat deleted');
   };
 
+  const viewFlatInvoices = async (flat) => {
+    setSelectedFlat(flat);
+    const building = buildings.find(b => b.id === flat.building_id);
+    const customerName = `${building?.name || ''}, Flat ${flat.flat_number}`;
+    
+    try {
+      // Try to find invoices by customer_name or user_id in notes
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .or(`customer_name.ilike.%${flat.flat_number}%,customer_phone.eq.${flat.user_id}`)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error loading invoices:', error);
+        setFlatInvoices([]);
+      } else {
+        // Filter more precisely
+        const filtered = (data || []).filter(inv => 
+          inv.customer_name?.includes(flat.flat_number) || 
+          inv.customer_phone === flat.user_id
+        );
+        setFlatInvoices(filtered);
+      }
+    } catch (err) {
+      console.error('Failed to load invoices:', err);
+      setFlatInvoices([]);
+    }
+    
+    setShowInvoicesDialog(true);
+  };
+
   const getBuildingName = (buildingId) => {
     return buildings.find(b => b.id === buildingId)?.name || 'Unknown';
   };
 
+  // Filter buildings and flats based on search query
+  const filteredBuildings = buildings.filter(building => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    
+    // Match building name
+    if (building.name.toLowerCase().includes(query)) return true;
+    
+    // Match any flat in this building
+    const buildingFlats = allFlats.filter(f => f.building_id === building.id);
+    return buildingFlats.some(flat => 
+      flat.flat_number.toLowerCase().includes(query) ||
+      flat.user_id?.toLowerCase().includes(query)
+    );
+  });
+
+  const getFilteredFlats = (buildingId) => {
+    const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
+    if (!searchQuery.trim()) return buildingFlats;
+    
+    const query = searchQuery.toLowerCase();
+    return buildingFlats.filter(flat =>
+      flat.flat_number.toLowerCase().includes(query) ||
+      flat.user_id?.toLowerCase().includes(query) ||
+      getBuildingName(flat.building_id).toLowerCase().includes(query)
+    );
+  };
+
   return (
     <div className="space-y-6">
-      {/* Buildings Section */}
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by building name, flat number, or user ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Buildings with Flats - Hierarchical View */}
       <Card className="gradient-card shadow-soft border-0">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Building2 className="w-5 h-5" />
-            Buildings ({buildings.length})
+            Buildings & Flats ({buildings.length} buildings, {allFlats.length} flats)
           </CardTitle>
           <Button 
             onClick={() => setShowAddBuildingDialog(true)} 
@@ -145,21 +238,49 @@ const CustomerManagement = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          {buildings.length === 0 ? (
+          {filteredBuildings.length === 0 ? (
             <div className="text-center py-8">
               <Building2 className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-lg font-semibold mb-1">No Buildings</p>
-              <p className="text-muted-foreground text-sm">Add your first building to get started.</p>
+              <p className="text-lg font-semibold mb-1">No Buildings Found</p>
+              <p className="text-muted-foreground text-sm">
+                {searchQuery ? 'No results match your search.' : 'Add your first building to get started.'}
+              </p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {buildings.map((building) => {
-                const buildingFlats = allFlats.filter(f => f.building_id === building.id);
+            <div className="space-y-3">
+              {filteredBuildings.map((building) => {
+                const buildingFlats = getFilteredFlats(building.id);
+                const isExpanded = expandedBuildings[building.id];
+                
                 return (
-                  <Card key={building.id} className="border shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-2">
+                  <Card key={building.id} className="border shadow-sm overflow-hidden">
+                    {/* Building Header */}
+                    <div 
+                      className="p-3 bg-muted/30 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => toggleBuilding(building.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                        <Building2 className="w-4 h-4 text-primary" />
                         <h3 className="font-semibold">{building.name}</h3>
+                        <span className="text-sm text-muted-foreground">
+                          ({allFlats.filter(f => f.building_id === building.id).length} flats)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openFlatDialog(null, building.id)}
+                          className="h-7 text-xs flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Flat
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -169,79 +290,77 @@ const CustomerManagement = () => {
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {buildingFlats.length} flat{buildingFlats.length !== 1 ? 's' : ''}
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openFlatDialog(null, building.id)}
-                        className="w-full flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Flat
-                      </Button>
-                    </CardContent>
+                    </div>
+                    
+                    {/* Flats List */}
+                    {isExpanded && (
+                      <div className="p-3 space-y-2">
+                        {buildingFlats.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-2">
+                            No flats in this building
+                          </p>
+                        ) : (
+                          buildingFlats.map((flat) => (
+                            <div 
+                              key={flat.id} 
+                              className="flex items-center justify-between p-2 border rounded-lg hover:bg-muted/20 transition-colors"
+                            >
+                              <div 
+                                className="flex-1 cursor-pointer"
+                                onClick={() => viewFlatInvoices(flat)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Home className="w-4 h-4 text-muted-foreground" />
+                                  <span className="font-medium">Flat {flat.flat_number}</span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    ID: <span className="font-mono font-semibold text-primary">{flat.user_id || 'N/A'}</span>
+                                  </span>
+                                  {flat.phone && (
+                                    <span className="flex items-center gap-1">
+                                      <Phone className="w-3 h-3" />
+                                      {flat.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => viewFlatInvoices(flat)}
+                                  className="h-7 w-7 p-0"
+                                  title="View Invoices"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openFlatDialog(flat)}
+                                  className="h-7 w-7 p-0"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteFlat(flat.id)}
+                                  className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </Card>
                 );
               })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Flats Section */}
-      <Card className="gradient-card shadow-soft border-0">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Home className="w-5 h-5" />
-            All Flats/Houses ({allFlats.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {allFlats.length === 0 ? (
-            <div className="text-center py-8">
-              <Home className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-lg font-semibold mb-1">No Flats</p>
-              <p className="text-muted-foreground text-sm">Add buildings first, then add flats.</p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {allFlats.map((flat) => (
-                <Card key={flat.id} className="border shadow-sm">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">{getBuildingName(flat.building_id)} - Flat {flat.flat_number}</p>
-                        {flat.phone && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {flat.phone}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openFlatDialog(flat)}
-                          className="h-7 w-7 p-0"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteFlat(flat.id)}
-                          className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
             </div>
           )}
         </CardContent>
@@ -312,6 +431,12 @@ const CustomerManagement = () => {
                 onChange={(e) => setFlatForm({ ...flatForm, phone: e.target.value })}
               />
             </div>
+            {editingFlat && editingFlat.user_id && (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <Label className="text-xs text-muted-foreground">Customer Login ID</Label>
+                <p className="font-mono font-bold text-primary text-lg">{editingFlat.user_id}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFlatDialog(false)}>
@@ -321,6 +446,49 @@ const CustomerManagement = () => {
               {editingFlat ? 'Update' : 'Add Flat'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoices Dialog */}
+      <Dialog open={showInvoicesDialog} onOpenChange={setShowInvoicesDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Invoices - {selectedFlat && `${getBuildingName(selectedFlat.building_id)}, Flat ${selectedFlat.flat_number}`}
+            </DialogTitle>
+            {selectedFlat && (
+              <p className="text-sm text-muted-foreground">
+                Customer ID: <span className="font-mono font-semibold text-primary">{selectedFlat.user_id}</span>
+              </p>
+            )}
+          </DialogHeader>
+          <div className="space-y-3">
+            {flatInvoices.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-lg font-semibold mb-1">No Invoices</p>
+                <p className="text-muted-foreground text-sm">No invoices found for this flat.</p>
+              </div>
+            ) : (
+              flatInvoices.map((invoice) => (
+                <Card key={invoice.id} className="border shadow-sm">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold">#{invoice.invoice_number}</span>
+                      <span className={`text-xs px-2 py-1 rounded ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {invoice.status?.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p>Date: {new Date(invoice.created_at).toLocaleDateString()}</p>
+                      <p className="font-semibold text-foreground">Total: {formatCurrency(invoice.grand_total)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

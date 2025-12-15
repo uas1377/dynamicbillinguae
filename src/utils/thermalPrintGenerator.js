@@ -53,6 +53,13 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               margin: 8px 0;
               border-radius: 4px;
             }
+            .customer-id {
+              background: #e8f5e9;
+              padding: 6px;
+              margin: 6px 0;
+              border-radius: 4px;
+              text-align: center;
+            }
             @media print {
               body { width: 280px; }
               .no-print { display: none; }
@@ -77,7 +84,13 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               <span>Time: ${new Date().toLocaleTimeString()}</span>
             </div>
             ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
-            ${invoiceData.customerPhone ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
+            ${invoiceData.customerId ? `
+              <div class="customer-id">
+                <span class="small">Customer ID:</span>
+                <span class="bold" style="font-size: 14px; font-family: monospace;">${invoiceData.customerId}</span>
+              </div>
+            ` : ''}
+            ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
             ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
           </div>
           
@@ -94,31 +107,31 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             <div class="item-row">
               <span class="item-name">${item.name}</span>
               <span class="item-qty">${item.quantity}</span>
-              <span class="item-rate">₹${item.amount}</span>
-              <span class="item-amount">₹${(item.quantity * item.amount).toFixed(2)}</span>
+              <span class="item-rate">AED ${item.amount}</span>
+              <span class="item-amount">AED ${(item.quantity * item.amount).toFixed(2)}</span>
             </div>
           `).join('')}
           
           <div class="dashed-line">
             <div class="flex">
               <span>Subtotal:</span>
-              <span>₹${invoiceData.subTotal}</span>
+              <span>AED ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div class="flex">
                 <span>Discount:</span>
-                <span>-₹${invoiceData.discountAmount}</span>
+                <span>-AED ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div class="flex">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>₹${invoiceData.taxAmount}</span>
+                <span>AED ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>₹${invoiceData.grandTotal}</span>
+              <span>AED ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
@@ -126,11 +139,11 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             <div class="change-box">
               <div class="flex">
                 <span>Amount Received:</span>
-                <span class="bold">₹${invoiceData.amountReceived}</span>
+                <span class="bold">AED ${invoiceData.amountReceived}</span>
               </div>
               <div class="flex bold large">
                 <span>Change:</span>
-                <span>₹${invoiceData.changeAmount}</span>
+                <span>AED ${invoiceData.changeAmount}</span>
               </div>
             </div>
           ` : ''}
@@ -198,7 +211,13 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
               <span>Time: ${new Date().toLocaleTimeString()}</span>
             </div>
             ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
-            ${invoiceData.customerPhone ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
+            ${invoiceData.customerId ? `
+              <div style="background: #e8f5e9; padding: 6px; margin: 6px 0; border-radius: 4px; text-align: center;">
+                <span style="font-size: 12px;">Customer ID: </span>
+                <span style="font-weight: bold; font-size: 14px; font-family: monospace;">${invoiceData.customerId}</span>
+              </div>
+            ` : ''}
+            ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
             ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
           </div>
           
@@ -216,8 +235,8 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
               <div style="display: flex; justify-content: space-between;">
                 <span style="width: 140px; font-size: 12px;">${item.name}</span>
                 <span style="width: 40px; text-align: center; font-size: 12px;">${item.quantity}</span>
-                <span style="width: 50px; text-align: right; font-size: 12px;">₹${item.amount}</span>
-                <span style="width: 60px; text-align: right; font-size: 12px;">₹${(item.quantity * item.amount).toFixed(2)}</span>
+                <span style="width: 50px; text-align: right; font-size: 12px;">AED ${item.amount}</span>
+                <span style="width: 60px; text-align: right; font-size: 12px;">AED ${(item.quantity * item.amount).toFixed(2)}</span>
               </div>
             </div>
           `).join('')}
@@ -225,23 +244,23 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           <div style="border-top: 1px dashed #000; padding-top: 4px; margin-top: 8px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Subtotal:</span>
-              <span>₹${invoiceData.subTotal}</span>
+              <span>AED ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Discount:</span>
-                <span>-₹${invoiceData.discountAmount}</span>
+                <span>-AED ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>₹${invoiceData.taxAmount}</span>
+                <span>AED ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>₹${invoiceData.grandTotal}</span>
+              <span>AED ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
@@ -249,11 +268,11 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
             <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
               <div style="display: flex; justify-content: space-between;">
                 <span>Amount Received:</span>
-                <span style="font-weight: bold;">₹${invoiceData.amountReceived}</span>
+                <span style="font-weight: bold;">AED ${invoiceData.amountReceived}</span>
               </div>
               <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
                 <span>Change:</span>
-                <span>₹${invoiceData.changeAmount}</span>
+                <span>AED ${invoiceData.changeAmount}</span>
               </div>
             </div>
           ` : ''}

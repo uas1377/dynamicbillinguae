@@ -45,6 +45,16 @@ const generateId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+// Generate a unique 6-character user ID for customer login
+const generateUserId = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid confusing chars like 0/O, 1/I
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 export const addBuildingToStorage = (name) => {
   const buildings = getStoredBuildings();
   const newBuilding = {
@@ -70,6 +80,7 @@ export const addFlatToStorage = (buildingId, flatNumber) => {
     building_id: buildingId,
     flat_number: flatNumber,
     phone: null,
+    user_id: generateUserId(), // Auto-generated unique user ID for login
     created_at: new Date().toISOString(),
   };
   const updated = [...flats, newFlat];
@@ -81,6 +92,34 @@ export const updateFlatPhoneInStorage = (flatId, phone) => {
   const flats = getStoredFlats();
   const updated = flats.map((flat) =>
     flat.id === flatId ? { ...flat, phone: phone || null } : flat
+  );
+  setStoredFlats(updated);
+  return updated;
+};
+
+export const getFlatByUserId = (userId) => {
+  const flats = getStoredFlats();
+  return flats.find((flat) => flat.user_id === userId) || null;
+};
+
+export const deleteBuildingFromStorage = (buildingId) => {
+  const buildings = getStoredBuildings();
+  const updated = buildings.filter((b) => b.id !== buildingId);
+  setStoredBuildings(updated);
+  return updated;
+};
+
+export const deleteFlatFromStorage = (flatId) => {
+  const flats = getStoredFlats();
+  const updated = flats.filter((f) => f.id !== flatId);
+  setStoredFlats(updated);
+  return updated;
+};
+
+export const updateFlatInStorage = (flatId, updates) => {
+  const flats = getStoredFlats();
+  const updated = flats.map((flat) =>
+    flat.id === flatId ? { ...flat, ...updates } : flat
   );
   setStoredFlats(updated);
   return updated;
