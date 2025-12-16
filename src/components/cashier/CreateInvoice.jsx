@@ -281,8 +281,7 @@ const CreateInvoice = () => {
         tax_rate: taxRate,
         tax_amount: calculateTax(),
         grand_total: calculateTotal(),
-        status: invoiceStatus,
-        cashier_name: cashierName
+        status: invoiceStatus
       };
 
       const { error: invoiceError } = await supabase
