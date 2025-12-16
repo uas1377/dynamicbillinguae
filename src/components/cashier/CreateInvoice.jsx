@@ -32,8 +32,6 @@ const CreateInvoice = () => {
   const [flatSearch, setFlatSearch] = useState('');
   const [taxRate, setTaxRate] = useState(0);
   const [invoiceStatus, setInvoiceStatus] = useState('paid');
-  const [discountType, setDiscountType] = useState('amount');
-  const [discountValue, setDiscountValue] = useState(0);
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
   const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
   const [amountReceived, setAmountReceived] = useState(0);
@@ -222,21 +220,15 @@ const CreateInvoice = () => {
     return selectedProducts.reduce((sum, product) => sum + (product.quantity * product.amount), 0);
   };
 
-  const calculateDiscount = () => {
-    const subtotal = calculateSubtotal();
-    if (discountType === 'percentage') {
-      return (subtotal * discountValue) / 100;
-    }
-    return discountValue;
-  };
+  const calculateDiscount = () => 0;
 
   const calculateTax = () => {
-    const subtotalAfterDiscount = calculateSubtotal() - calculateDiscount();
+    return (calculateSubtotal() * taxRate) / 100;
     return (subtotalAfterDiscount * taxRate) / 100;
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() - calculateDiscount() + calculateTax();
+    return calculateSubtotal() + calculateTax();
   };
 
   const calculateChange = () => {
@@ -282,20 +274,15 @@ const CreateInvoice = () => {
       const newInvoice = {
         invoice_number: invoiceNumber,
         customer_id: customer?.id || null,
-        customer_phone: flat?.user_id || customer?.phone || null, // Store user_id for lookup
+        customer_phone: flat?.user_id || customer?.phone || null,
         customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
         items: selectedProducts,
         sub_total: calculateSubtotal(),
-        discount_type: discountType,
-        discount_value: discountValue,
-        discount_amount: calculateDiscount(),
         tax_rate: taxRate,
         tax_amount: calculateTax(),
         grand_total: calculateTotal(),
         status: invoiceStatus,
-        cashier_name: cashierName,
-        amount_received: amountReceived,
-        change_amount: calculateChange()
+        cashier_name: cashierName
       };
 
       const { error: invoiceError } = await supabase
@@ -328,8 +315,6 @@ const CreateInvoice = () => {
       setSelectedFlat('');
       setFlatSearch('');
       setTaxRate(0);
-      setDiscountType('amount');
-      setDiscountValue(0);
       setInvoiceStatus('paid');
       setAmountReceived(0);
       setShowCheckoutDialog(false);
@@ -459,7 +444,7 @@ const CreateInvoice = () => {
                     <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground">₹{product.price}</p>
+                  <p className="text-xs text-muted-foreground">AED {product.price}</p>
                 </CardContent>
               </Card>
             ))}
@@ -603,12 +588,6 @@ const CreateInvoice = () => {
                   <span>Subtotal:</span>
                   <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span>
                 </div>
-                {calculateDiscount() > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span className="font-semibold">-{formatCurrency(calculateDiscount())}</span>
-                  </div>
-                )}
                 {taxRate > 0 && (
                   <div className="flex justify-between">
                     <span>Tax ({taxRate}%):</span>
@@ -702,8 +681,8 @@ const CreateInvoice = () => {
               </div>
             </div>
             
-            {/* Tax and Discount */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* Tax Rate */}
+            <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Tax Rate (%)</Label>
                 <Input
@@ -714,34 +693,6 @@ const CreateInvoice = () => {
                   min="0"
                   max="100"
                   step="0.1"
-                  className="h-9"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs">Discount Type</Label>
-                <Select value={discountType} onValueChange={setDiscountType}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    <SelectItem value="amount">Amount</SelectItem>
-                    <SelectItem value="percentage">Percentage</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs">
-                  Discount {discountType === 'percentage' ? '(%)' : '(₹)'}
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-                  min="0"
-                  max={discountType === 'percentage' ? "100" : undefined}
                   className="h-9"
                 />
               </div>

@@ -130,7 +130,7 @@ const ProfitDashboard = () => {
         {/* Profit Adjustments */}
         <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
           <div className="space-y-2">
-            <Label htmlFor="additionalCosts">Additional Costs (₹)</Label>
+            <Label htmlFor="additionalCosts">Additional Costs (AED)</Label>
             <Input
               id="additionalCosts"
               type="number"
@@ -143,7 +143,7 @@ const ProfitDashboard = () => {
             <p className="text-xs text-muted-foreground">Costs to deduct from profit (e.g., rent, utilities)</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="extraProfit">Extra Profit (₹)</Label>
+            <Label htmlFor="extraProfit">Extra Profit (AED)</Label>
             <Input
               id="extraProfit"
               type="number"

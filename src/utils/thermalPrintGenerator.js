@@ -149,7 +149,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           ` : ''}
           
           <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
-            <div>Thank you for your business!</div>
+            <div>Thank you for shopping!</div>
             <div>Visit again</div>
           </div>
         </body>
@@ -278,7 +278,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           ` : ''}
           
           <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 12px;">
-            <div>Thank you for your business!</div>
+            <div>Thank you for shopping!</div>
             <div>Visit again</div>
           </div>
         </div>
