@@ -14,8 +14,8 @@ const BillToSection = ({ billTo, handleInputChange, selectedCurrency, setSelecte
           className="flex space-x-4"
         >
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="INR" id="inr" />
-            <Label htmlFor="inr">INR (₹)</Label>
+            <RadioGroupItem value="AED" id="aed" />
+            <Label htmlFor="aed">AED (د.إ)</Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="USD" id="usd" />
