@@ -7,7 +7,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Building2, Home, Plus, Edit, Trash2, Phone, Search, FileText, ChevronDown, ChevronRight, User } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getStoredBuildings,
+  getStoredFlats,
+  addBuildingToStorage,
+  addFlatToStorage,
+  updateFlatInStorage,
+  deleteBuildingFromStorage,
+  deleteFlatFromStorage
+} from "@/utils/buildingFlatStorage";
 
 const CustomerManagement = () => {
   const [buildings, setBuildings] = useState([]);
@@ -37,26 +45,17 @@ const CustomerManagement = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    try {
-      const [buildingsRes, flatsRes] = await Promise.all([
-        supabase.from('buildings').select('*').order('created_at', { ascending: true }),
-        supabase.from('flats').select('*').order('created_at', { ascending: true })
-      ]);
+  const loadData = () => {
+    const loadedBuildings = getStoredBuildings();
+    const loadedFlats = getStoredFlats();
+    
+    setBuildings(loadedBuildings);
+    setAllFlats(loadedFlats);
 
-      if (buildingsRes.error) throw buildingsRes.error;
-      if (flatsRes.error) throw flatsRes.error;
-
-      setBuildings(buildingsRes.data || []);
-      setAllFlats(flatsRes.data || []);
-
-      // Expand all buildings by default
-      const expanded = {};
-      (buildingsRes.data || []).forEach(b => { expanded[b.id] = true; });
-      setExpandedBuildings(expanded);
-    } catch (error) {
-      toast.error('Failed to load data: ' + error.message);
-    }
+    // Expand all buildings by default
+    const expanded = {};
+    loadedBuildings.forEach(b => { expanded[b.id] = true; });
+    setExpandedBuildings(expanded);
   };
 
   const toggleBuilding = (buildingId) => {
@@ -66,47 +65,30 @@ const CustomerManagement = () => {
     }));
   };
 
-  const handleAddBuilding = async () => {
+  const handleAddBuilding = () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .insert({ name: newBuildingName.trim() })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setBuildings([...buildings, data]);
-      setExpandedBuildings(prev => ({ ...prev, [data.id]: true }));
-      setNewBuildingName('');
-      setShowAddBuildingDialog(false);
-      toast.success('Building added successfully');
-    } catch (error) {
-      toast.error('Failed to add building: ' + error.message);
-    }
+    const newBuilding = addBuildingToStorage(newBuildingName.trim());
+    setBuildings([...buildings, newBuilding]);
+    setExpandedBuildings(prev => ({ ...prev, [newBuilding.id]: true }));
+    setNewBuildingName('');
+    setShowAddBuildingDialog(false);
+    toast.success('Building added successfully');
   };
 
-  const handleDeleteBuilding = async (buildingId) => {
+  const handleDeleteBuilding = (buildingId) => {
     const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
     if (buildingFlats.length > 0) {
       toast.error('Cannot delete building with flats. Delete flats first.');
       return;
     }
     
-    try {
-      const { error } = await supabase.from('buildings').delete().eq('id', buildingId);
-      if (error) throw error;
-      
-      setBuildings(buildings.filter(b => b.id !== buildingId));
-      toast.success('Building deleted');
-    } catch (error) {
-      toast.error('Failed to delete building: ' + error.message);
-    }
+    deleteBuildingFromStorage(buildingId);
+    setBuildings(buildings.filter(b => b.id !== buildingId));
+    toast.success('Building deleted');
   };
 
   const openFlatDialog = (flat = null, buildingId = '') => {
@@ -119,7 +101,7 @@ const CustomerManagement = () => {
     setShowFlatDialog(true);
   };
 
-  const handleSaveFlat = async () => {
+  const handleSaveFlat = () => {
     if (!flatForm.building_id) {
       toast.error('Please select a building');
       return;
@@ -130,92 +112,50 @@ const CustomerManagement = () => {
       return;
     }
 
-    try {
-      if (editingFlat) {
-        // Update existing flat
-        const { error } = await supabase
-          .from('flats')
-          .update({ 
-            flat_number: flatForm.flat_number.trim(), 
-            phone: flatForm.phone.trim() || null 
-          })
-          .eq('id', editingFlat.id);
-
-        if (error) throw error;
-
-        setAllFlats(allFlats.map(f => 
-          f.id === editingFlat.id 
-            ? { ...f, flat_number: flatForm.flat_number.trim(), phone: flatForm.phone.trim() || null }
-            : f
-        ));
-        toast.success('Flat updated successfully');
-      } else {
-        // Add new flat
-        const { data, error } = await supabase
-          .from('flats')
-          .insert({ 
-            building_id: flatForm.building_id, 
-            flat_number: flatForm.flat_number.trim(),
-            phone: flatForm.phone.trim() || null
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        setAllFlats([...allFlats, data]);
-        toast.success('Flat added successfully');
-      }
-
-      setShowFlatDialog(false);
-      setEditingFlat(null);
-      setFlatForm({ building_id: '', flat_number: '', phone: '' });
-    } catch (error) {
-      toast.error('Failed to save flat: ' + error.message);
-    }
-  };
-
-  const handleDeleteFlat = async (flatId) => {
-    try {
-      const { error } = await supabase.from('flats').delete().eq('id', flatId);
-      if (error) throw error;
-
-      setAllFlats(allFlats.filter(f => f.id !== flatId));
-      toast.success('Flat deleted');
-    } catch (error) {
-      toast.error('Failed to delete flat: ' + error.message);
-    }
-  };
-
-  const viewFlatInvoices = async (flat) => {
-    setSelectedFlat(flat);
-    const building = buildings.find(b => b.id === flat.building_id);
-    const customerName = `${building?.name || ''}, Flat ${flat.flat_number}`;
-    
-    try {
-      // Try to find invoices by customer_name or user_id in notes
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .or(`customer_name.ilike.%${flat.flat_number}%,customer_phone.eq.${flat.user_id}`)
-        .order('created_at', { ascending: false });
+    if (editingFlat) {
+      // Update existing flat
+      updateFlatInStorage(editingFlat.id, {
+        flat_number: flatForm.flat_number.trim(),
+        phone: flatForm.phone.trim() || null
+      });
       
-      if (error) {
-        console.error('Error loading invoices:', error);
-        setFlatInvoices([]);
-      } else {
-        // Filter more precisely
-        const filtered = (data || []).filter(inv => 
-          inv.customer_name?.includes(flat.flat_number) || 
-          inv.customer_phone === flat.user_id
-        );
-        setFlatInvoices(filtered);
+      setAllFlats(allFlats.map(f => 
+        f.id === editingFlat.id 
+          ? { ...f, flat_number: flatForm.flat_number.trim(), phone: flatForm.phone.trim() || null }
+          : f
+      ));
+      toast.success('Flat updated successfully');
+    } else {
+      // Add new flat
+      const newFlat = addFlatToStorage(flatForm.building_id, flatForm.flat_number.trim());
+      if (flatForm.phone.trim()) {
+        updateFlatInStorage(newFlat.id, { phone: flatForm.phone.trim() });
+        newFlat.phone = flatForm.phone.trim();
       }
-    } catch (err) {
-      console.error('Failed to load invoices:', err);
-      setFlatInvoices([]);
+      setAllFlats([...allFlats, newFlat]);
+      toast.success('Flat added successfully');
     }
-    
+
+    setShowFlatDialog(false);
+    setEditingFlat(null);
+    setFlatForm({ building_id: '', flat_number: '', phone: '' });
+  };
+
+  const handleDeleteFlat = (flatId) => {
+    deleteFlatFromStorage(flatId);
+    setAllFlats(allFlats.filter(f => f.id !== flatId));
+    toast.success('Flat deleted');
+  };
+
+  const viewFlatInvoices = (flat) => {
+    setSelectedFlat(flat);
+    // Load invoices from localStorage
+    const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+    const filtered = allInvoices.filter(inv => 
+      inv.customer_name?.includes(flat.flat_number) || 
+      inv.customer_phone === flat.user_id
+    );
+    setFlatInvoices(filtered);
     setShowInvoicesDialog(true);
   };
 
@@ -457,74 +397,67 @@ const CustomerManagement = () => {
                 ))}
               </select>
             </div>
+            
             <div className="space-y-2">
-              <Label>Flat/House Number *</Label>
+              <Label>Flat Number *</Label>
               <Input
-                placeholder="e.g., 101, A-201, House 5"
+                placeholder="Enter flat number"
                 value={flatForm.flat_number}
                 onChange={(e) => setFlatForm({ ...flatForm, flat_number: e.target.value })}
               />
             </div>
+            
             <div className="space-y-2">
-              <Label>Phone Number (Optional)</Label>
+              <Label>Phone (optional)</Label>
               <Input
                 placeholder="Enter phone number"
                 value={flatForm.phone}
                 onChange={(e) => setFlatForm({ ...flatForm, phone: e.target.value })}
               />
             </div>
-            {editingFlat && editingFlat.user_id && (
-              <div className="p-3 bg-muted/50 rounded-lg">
-                <Label className="text-xs text-muted-foreground">Customer Login ID</Label>
-                <p className="font-mono font-bold text-primary text-lg">{editingFlat.user_id}</p>
-              </div>
-            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFlatDialog(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveFlat} className="gradient-primary text-white border-0">
-              {editingFlat ? 'Update' : 'Add Flat'}
+              {editingFlat ? 'Update Flat' : 'Add Flat'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Invoices Dialog */}
+      {/* View Invoices Dialog */}
       <Dialog open={showInvoicesDialog} onOpenChange={setShowInvoicesDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Invoices - {selectedFlat && `${getBuildingName(selectedFlat.building_id)}, Flat ${selectedFlat.flat_number}`}
+            <DialogTitle>
+              Invoices for {selectedFlat && `Flat ${selectedFlat.flat_number}`}
             </DialogTitle>
-            {selectedFlat && (
-              <p className="text-sm text-muted-foreground">
-                Customer ID: <span className="font-mono font-semibold text-primary">{selectedFlat.user_id}</span>
-              </p>
-            )}
           </DialogHeader>
           <div className="space-y-3">
             {flatInvoices.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-lg font-semibold mb-1">No Invoices</p>
-                <p className="text-muted-foreground text-sm">No invoices found for this flat.</p>
+                <p className="text-muted-foreground">No invoices found for this flat</p>
               </div>
             ) : (
               flatInvoices.map((invoice) => (
-                <Card key={invoice.id} className="border shadow-sm">
+                <Card key={invoice.id || invoice.invoice_number} className="border">
                   <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold">#{invoice.invoice_number}</span>
-                      <span className={`text-xs px-2 py-1 rounded ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {invoice.status?.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      <p>Date: {new Date(invoice.created_at).toLocaleDateString()}</p>
-                      <p className="font-semibold text-foreground">Total: {formatCurrency(invoice.grand_total)}</p>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold">{invoice.invoice_number}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(invoice.created_at || invoice.date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold">{formatCurrency(invoice.grand_total)}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {invoice.status?.toUpperCase() || 'PAID'}
+                        </span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

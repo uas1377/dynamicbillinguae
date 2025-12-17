@@ -5,6 +5,8 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
     try {
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const isPaid = invoiceData.status !== 'unpaid';
+      const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       const printDocument = printWindow.document;
@@ -41,11 +43,12 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               display: flex;
               justify-content: space-between;
               margin-bottom: 4px;
-              font-size: 12px;
+              font-size: 11px;
             }
-            .item-name { width: 140px; }
-            .item-qty { width: 30px; text-align: center; }
-            .item-rate { width: 40px; text-align: right; }
+            .item-name { width: 90px; }
+            .item-sku { width: 50px; font-size: 9px; color: #666; }
+            .item-qty { width: 25px; text-align: center; }
+            .item-rate { width: 45px; text-align: right; }
             .item-amount { width: 50px; text-align: right; }
             .change-box {
               background: #f0f0f0;
@@ -97,6 +100,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <div class="dashed-line">
             <div class="item-row bold">
               <span class="item-name">Item</span>
+              <span class="item-sku">SKU</span>
               <span class="item-qty">Qty</span>
               <span class="item-rate">Rate</span>
               <span class="item-amount">Amount</span>
@@ -105,10 +109,11 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           
           ${invoiceData.items.map(item => `
             <div class="item-row">
-              <span class="item-name">${item.name}${item.sku ? `<br><span style="font-size:10px;color:#666;">SKU: ${item.sku}</span>` : ''}</span>
+              <span class="item-name">${item.name}</span>
+              <span class="item-sku">${item.sku || '-'}</span>
               <span class="item-qty">${item.quantity}</span>
-              <span class="item-rate">AED ${item.amount}</span>
-              <span class="item-amount">AED ${(item.quantity * item.amount).toFixed(2)}</span>
+              <span class="item-rate">${item.amount}</span>
+              <span class="item-amount">${(item.quantity * item.amount).toFixed(2)}</span>
             </div>
           `).join('')}
           
@@ -135,18 +140,18 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
             </div>
           </div>
           
-          ${invoiceData.amountReceived && parseFloat(invoiceData.amountReceived) > 0 ? `
-            <div class="change-box">
-              <div class="flex">
-                <span>Amount Received:</span>
-                <span class="bold">AED ${invoiceData.amountReceived}</span>
-              </div>
+          <div class="change-box">
+            <div class="flex">
+              <span>Amount Paid:</span>
+              <span class="bold">AED ${amountPaidDisplay}</span>
+            </div>
+            ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div class="flex bold large">
                 <span>Change:</span>
                 <span>AED ${invoiceData.changeAmount}</span>
               </div>
-            </div>
-          ` : ''}
+            ` : ''}
+          </div>
           
           <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
             <div>Thank you for shopping!</div>
@@ -183,6 +188,8 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const isPaid = invoiceData.status !== 'unpaid';
+      const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
       printContent.innerHTML = `
         <div style="
@@ -222,21 +229,23 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           </div>
           
           <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin: 8px 0;">
-            <div style="display: flex; justify-content: space-between; font-weight: bold;">
-              <span style="width: 140px;">Item</span>
-              <span style="width: 40px; text-align: center;">Qty</span>
-              <span style="width: 50px; text-align: right;">Rate</span>
-              <span style="width: 60px; text-align: right;">Amount</span>
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
+              <span style="width: 90px;">Item</span>
+              <span style="width: 50px;">SKU</span>
+              <span style="width: 30px; text-align: center;">Qty</span>
+              <span style="width: 45px; text-align: right;">Rate</span>
+              <span style="width: 55px; text-align: right;">Amount</span>
             </div>
           </div>
           
           ${invoiceData.items.map(item => `
             <div style="margin-bottom: 4px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="width: 140px; font-size: 12px;">${item.name}${item.sku ? `<br><span style="font-size:10px;color:#666;">SKU: ${item.sku}</span>` : ''}</span>
-                <span style="width: 40px; text-align: center; font-size: 12px;">${item.quantity}</span>
-                <span style="width: 50px; text-align: right; font-size: 12px;">AED ${item.amount}</span>
-                <span style="width: 60px; text-align: right; font-size: 12px;">AED ${(item.quantity * item.amount).toFixed(2)}</span>
+              <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                <span style="width: 90px;">${item.name}</span>
+                <span style="width: 50px; font-size: 9px; color: #666;">${item.sku || '-'}</span>
+                <span style="width: 30px; text-align: center;">${item.quantity}</span>
+                <span style="width: 45px; text-align: right;">${item.amount}</span>
+                <span style="width: 55px; text-align: right;">${(item.quantity * item.amount).toFixed(2)}</span>
               </div>
             </div>
           `).join('')}
@@ -264,18 +273,18 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
             </div>
           </div>
           
-          ${invoiceData.amountReceived && parseFloat(invoiceData.amountReceived) > 0 ? `
-            <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span>Amount Received:</span>
-                <span style="font-weight: bold;">AED ${invoiceData.amountReceived}</span>
-              </div>
+          <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Amount Paid:</span>
+              <span style="font-weight: bold;">AED ${amountPaidDisplay}</span>
+            </div>
+            ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
                 <span>Change:</span>
                 <span>AED ${invoiceData.changeAmount}</span>
               </div>
-            </div>
-          ` : ''}
+            ` : ''}
+          </div>
           
           <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 12px;">
             <div>Thank you for shopping!</div>
