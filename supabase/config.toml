@@ -1,16 +1,1 @@
-project_id = "yidujufgbevuzwzodjln"
-
-[functions.keep-alive]
-verify_jwt = false
-
-[functions.sync-products-sheets]
-verify_jwt = false
-
-[functions.update-sheets-on-product-change]
-verify_jwt = false
-
-[functions.poll-sheets-for-changes]
-verify_jwt = false
-
-[functions.sync-app-to-sheets]
-verify_jwt = false
+project_id = "tvknawvwxkodmtzcvnia"
