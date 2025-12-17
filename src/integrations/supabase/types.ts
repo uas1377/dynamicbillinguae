@@ -114,6 +114,7 @@ export type Database = {
           flat_number: string
           id: string
           phone: string | null
+          user_id: string | null
         }
         Insert: {
           building_id: string
@@ -121,6 +122,7 @@ export type Database = {
           flat_number: string
           id?: string
           phone?: string | null
+          user_id?: string | null
         }
         Update: {
           building_id?: string
@@ -128,6 +130,7 @@ export type Database = {
           flat_number?: string
           id?: string
           phone?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {

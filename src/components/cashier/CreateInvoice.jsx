@@ -13,12 +13,6 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
-import {
-  getStoredBuildings,
-  getStoredFlats,
-  addBuildingToStorage,
-  addFlatToStorage,
-} from "@/utils/buildingFlatStorage";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
@@ -52,7 +46,6 @@ const CreateInvoice = () => {
 
   useEffect(() => {
     loadData();
-    loadLocalData();
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     setCashierName(user.username || 'Cashier');
   }, []);
@@ -98,10 +91,11 @@ const CreateInvoice = () => {
 
   const loadData = async () => {
     try {
-      const [productsRes, customersRes, settingsRes] = await Promise.all([
+      const [productsRes, customersRes, settingsRes, buildingsRes] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single(),
+        supabase.from('buildings').select('*').order('created_at', { ascending: true }),
       ]);
 
       if (productsRes.error) {
@@ -125,36 +119,57 @@ const CreateInvoice = () => {
           logo: settingsRes.data.setting_value.logo || ''
         });
       }
+
+      if (!buildingsRes.error) {
+        setBuildings(buildingsRes.data || []);
+      }
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
     }
   };
 
-  const loadLocalData = () => {
-    const storedBuildings = getStoredBuildings();
-    setBuildings(storedBuildings);
+  const loadFlatsForBuilding = async (buildingId) => {
+    try {
+      const { data, error } = await supabase
+        .from('flats')
+        .select('*')
+        .eq('building_id', buildingId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setFlats(data || []);
+    } catch (error) {
+      toast.error('Failed to load flats: ' + error.message);
+      setFlats([]);
+    }
   };
 
-  const loadFlatsForBuilding = (buildingId) => {
-    const allFlats = getStoredFlats();
-    const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
-    setFlats(buildingFlats);
-  };
-
-  const handleAddBuilding = () => {
+  const handleAddBuilding = async () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
       return;
     }
-    const building = addBuildingToStorage(newBuildingName.trim());
-    setBuildings([...buildings, building]);
-    setSelectedBuilding(building.id);
-    setNewBuildingName('');
-    setShowAddBuildingDialog(false);
-    toast.success('Building added');
+    
+    try {
+      const { data, error } = await supabase
+        .from('buildings')
+        .insert({ name: newBuildingName.trim() })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setBuildings([...buildings, data]);
+      setSelectedBuilding(data.id);
+      setNewBuildingName('');
+      setShowAddBuildingDialog(false);
+      toast.success('Building added');
+    } catch (error) {
+      toast.error('Failed to add building: ' + error.message);
+    }
   };
 
-  const handleAddFlat = () => {
+  const handleAddFlat = async () => {
     if (!newFlatNumber.trim()) {
       toast.error('Flat number is required');
       return;
@@ -163,12 +178,24 @@ const CreateInvoice = () => {
       toast.error('Select a building first');
       return;
     }
-    const flat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
-    loadFlatsForBuilding(selectedBuilding);
-    setSelectedFlat(flat.id);
-    setNewFlatNumber('');
-    setShowAddFlatDialog(false);
-    toast.success('Flat added');
+    
+    try {
+      const { data, error } = await supabase
+        .from('flats')
+        .insert({ building_id: selectedBuilding, flat_number: newFlatNumber.trim() })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setFlats([...flats, data]);
+      setSelectedFlat(data.id);
+      setNewFlatNumber('');
+      setShowAddFlatDialog(false);
+      toast.success('Flat added');
+    } catch (error) {
+      toast.error('Failed to add flat: ' + error.message);
+    }
   };
 
   const getCustomerFromSelection = () => {

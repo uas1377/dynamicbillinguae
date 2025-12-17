@@ -105,7 +105,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           
           ${invoiceData.items.map(item => `
             <div class="item-row">
-              <span class="item-name">${item.name}</span>
+              <span class="item-name">${item.name}${item.sku ? `<br><span style="font-size:10px;color:#666;">SKU: ${item.sku}</span>` : ''}</span>
               <span class="item-qty">${item.quantity}</span>
               <span class="item-rate">AED ${item.amount}</span>
               <span class="item-amount">AED ${(item.quantity * item.amount).toFixed(2)}</span>
@@ -233,7 +233,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           ${invoiceData.items.map(item => `
             <div style="margin-bottom: 4px;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="width: 140px; font-size: 12px;">${item.name}</span>
+                <span style="width: 140px; font-size: 12px;">${item.name}${item.sku ? `<br><span style="font-size:10px;color:#666;">SKU: ${item.sku}</span>` : ''}</span>
                 <span style="width: 40px; text-align: center; font-size: 12px;">${item.quantity}</span>
                 <span style="width: 50px; text-align: right; font-size: 12px;">AED ${item.amount}</span>
                 <span style="width: 60px; text-align: right; font-size: 12px;">AED ${(item.quantity * item.amount).toFixed(2)}</span>
