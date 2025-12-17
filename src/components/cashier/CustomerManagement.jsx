@@ -8,15 +8,6 @@ import { Building2, Home, Plus, Edit, Trash2, Phone, Search, FileText, ChevronDo
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  getStoredBuildings,
-  getStoredFlats,
-  addBuildingToStorage,
-  addFlatToStorage,
-  updateFlatInStorage,
-  setStoredBuildings,
-  setStoredFlats,
-} from "@/utils/buildingFlatStorage";
 
 const CustomerManagement = () => {
   const [buildings, setBuildings] = useState([]);
@@ -46,16 +37,26 @@ const CustomerManagement = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const storedBuildings = getStoredBuildings();
-    const storedFlats = getStoredFlats();
-    setBuildings(storedBuildings);
-    setAllFlats(storedFlats);
-    
-    // Expand all buildings by default
-    const expanded = {};
-    storedBuildings.forEach(b => { expanded[b.id] = true; });
-    setExpandedBuildings(expanded);
+  const loadData = async () => {
+    try {
+      const [buildingsRes, flatsRes] = await Promise.all([
+        supabase.from('buildings').select('*').order('created_at', { ascending: true }),
+        supabase.from('flats').select('*').order('created_at', { ascending: true })
+      ]);
+
+      if (buildingsRes.error) throw buildingsRes.error;
+      if (flatsRes.error) throw flatsRes.error;
+
+      setBuildings(buildingsRes.data || []);
+      setAllFlats(flatsRes.data || []);
+
+      // Expand all buildings by default
+      const expanded = {};
+      (buildingsRes.data || []).forEach(b => { expanded[b.id] = true; });
+      setExpandedBuildings(expanded);
+    } catch (error) {
+      toast.error('Failed to load data: ' + error.message);
+    }
   };
 
   const toggleBuilding = (buildingId) => {
@@ -65,31 +66,47 @@ const CustomerManagement = () => {
     }));
   };
 
-  const handleAddBuilding = () => {
+  const handleAddBuilding = async () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
       return;
     }
 
-    const building = addBuildingToStorage(newBuildingName.trim());
-    setBuildings([...buildings, building]);
-    setExpandedBuildings(prev => ({ ...prev, [building.id]: true }));
-    setNewBuildingName('');
-    setShowAddBuildingDialog(false);
-    toast.success('Building added successfully');
+    try {
+      const { data, error } = await supabase
+        .from('buildings')
+        .insert({ name: newBuildingName.trim() })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setBuildings([...buildings, data]);
+      setExpandedBuildings(prev => ({ ...prev, [data.id]: true }));
+      setNewBuildingName('');
+      setShowAddBuildingDialog(false);
+      toast.success('Building added successfully');
+    } catch (error) {
+      toast.error('Failed to add building: ' + error.message);
+    }
   };
 
-  const handleDeleteBuilding = (buildingId) => {
+  const handleDeleteBuilding = async (buildingId) => {
     const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
     if (buildingFlats.length > 0) {
       toast.error('Cannot delete building with flats. Delete flats first.');
       return;
     }
     
-    const updatedBuildings = buildings.filter(b => b.id !== buildingId);
-    setStoredBuildings(updatedBuildings);
-    setBuildings(updatedBuildings);
-    toast.success('Building deleted');
+    try {
+      const { error } = await supabase.from('buildings').delete().eq('id', buildingId);
+      if (error) throw error;
+      
+      setBuildings(buildings.filter(b => b.id !== buildingId));
+      toast.success('Building deleted');
+    } catch (error) {
+      toast.error('Failed to delete building: ' + error.message);
+    }
   };
 
   const openFlatDialog = (flat = null, buildingId = '') => {
@@ -102,7 +119,7 @@ const CustomerManagement = () => {
     setShowFlatDialog(true);
   };
 
-  const handleSaveFlat = () => {
+  const handleSaveFlat = async () => {
     if (!flatForm.building_id) {
       toast.error('Please select a building');
       return;
@@ -113,36 +130,61 @@ const CustomerManagement = () => {
       return;
     }
 
-    if (editingFlat) {
-      // Update existing flat
-      const updatedFlats = allFlats.map(f => 
-        f.id === editingFlat.id 
-          ? { ...f, flat_number: flatForm.flat_number.trim(), phone: flatForm.phone.trim() || null }
-          : f
-      );
-      setStoredFlats(updatedFlats);
-      setAllFlats(updatedFlats);
-      toast.success('Flat updated successfully');
-    } else {
-      // Add new flat
-      const flat = addFlatToStorage(flatForm.building_id, flatForm.flat_number.trim());
-      if (flatForm.phone.trim()) {
-        updateFlatInStorage(flat.id, { phone: flatForm.phone.trim() });
-      }
-      loadData();
-      toast.success('Flat added successfully');
-    }
+    try {
+      if (editingFlat) {
+        // Update existing flat
+        const { error } = await supabase
+          .from('flats')
+          .update({ 
+            flat_number: flatForm.flat_number.trim(), 
+            phone: flatForm.phone.trim() || null 
+          })
+          .eq('id', editingFlat.id);
 
-    setShowFlatDialog(false);
-    setEditingFlat(null);
-    setFlatForm({ building_id: '', flat_number: '', phone: '' });
+        if (error) throw error;
+
+        setAllFlats(allFlats.map(f => 
+          f.id === editingFlat.id 
+            ? { ...f, flat_number: flatForm.flat_number.trim(), phone: flatForm.phone.trim() || null }
+            : f
+        ));
+        toast.success('Flat updated successfully');
+      } else {
+        // Add new flat
+        const { data, error } = await supabase
+          .from('flats')
+          .insert({ 
+            building_id: flatForm.building_id, 
+            flat_number: flatForm.flat_number.trim(),
+            phone: flatForm.phone.trim() || null
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setAllFlats([...allFlats, data]);
+        toast.success('Flat added successfully');
+      }
+
+      setShowFlatDialog(false);
+      setEditingFlat(null);
+      setFlatForm({ building_id: '', flat_number: '', phone: '' });
+    } catch (error) {
+      toast.error('Failed to save flat: ' + error.message);
+    }
   };
 
-  const handleDeleteFlat = (flatId) => {
-    const updatedFlats = allFlats.filter(f => f.id !== flatId);
-    setStoredFlats(updatedFlats);
-    setAllFlats(updatedFlats);
-    toast.success('Flat deleted');
+  const handleDeleteFlat = async (flatId) => {
+    try {
+      const { error } = await supabase.from('flats').delete().eq('id', flatId);
+      if (error) throw error;
+
+      setAllFlats(allFlats.filter(f => f.id !== flatId));
+      toast.success('Flat deleted');
+    } catch (error) {
+      toast.error('Failed to delete flat: ' + error.message);
+    }
   };
 
   const viewFlatInvoices = async (flat) => {
