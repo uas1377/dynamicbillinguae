@@ -91,11 +91,11 @@ const CreateInvoice = () => {
 
   const loadData = async () => {
     try {
-      const [productsRes, customersRes, settingsRes, buildingsRes] = await Promise.all([
+      // Load products from Supabase
+      const [productsRes, customersRes, settingsRes] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single(),
-        supabase.from('buildings').select('*').order('created_at', { ascending: true }),
       ]);
 
       if (productsRes.error) {
@@ -120,9 +120,10 @@ const CreateInvoice = () => {
         });
       }
 
-      if (!buildingsRes.error) {
-        setBuildings(buildingsRes.data || []);
-      }
+      // Load buildings from localStorage
+      const { getStoredBuildings, getStoredFlats } = await import('@/utils/buildingFlatStorage');
+      const storedBuildings = getStoredBuildings();
+      setBuildings(storedBuildings);
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
     }
@@ -130,16 +131,12 @@ const CreateInvoice = () => {
 
   const loadFlatsForBuilding = async (buildingId) => {
     try {
-      const { data, error } = await supabase
-        .from('flats')
-        .select('*')
-        .eq('building_id', buildingId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setFlats(data || []);
+      const { getStoredFlats } = await import('@/utils/buildingFlatStorage');
+      const allFlats = getStoredFlats();
+      const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
+      setFlats(buildingFlats);
     } catch (error) {
-      toast.error('Failed to load flats: ' + error.message);
+      toast.error('Failed to load flats');
       setFlats([]);
     }
   };
@@ -151,21 +148,16 @@ const CreateInvoice = () => {
     }
     
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .insert({ name: newBuildingName.trim() })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setBuildings([...buildings, data]);
-      setSelectedBuilding(data.id);
+      const { addBuildingToStorage } = await import('@/utils/buildingFlatStorage');
+      const newBuilding = addBuildingToStorage(newBuildingName.trim());
+      
+      setBuildings([...buildings, newBuilding]);
+      setSelectedBuilding(newBuilding.id);
       setNewBuildingName('');
       setShowAddBuildingDialog(false);
       toast.success('Building added');
     } catch (error) {
-      toast.error('Failed to add building: ' + error.message);
+      toast.error('Failed to add building');
     }
   };
 
@@ -180,21 +172,16 @@ const CreateInvoice = () => {
     }
     
     try {
-      const { data, error } = await supabase
-        .from('flats')
-        .insert({ building_id: selectedBuilding, flat_number: newFlatNumber.trim() })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setFlats([...flats, data]);
-      setSelectedFlat(data.id);
+      const { addFlatToStorage } = await import('@/utils/buildingFlatStorage');
+      const newFlat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
+      
+      setFlats([...flats, newFlat]);
+      setSelectedFlat(newFlat.id);
       setNewFlatNumber('');
       setShowAddFlatDialog(false);
       toast.success('Flat added');
     } catch (error) {
-      toast.error('Failed to add flat: ' + error.message);
+      toast.error('Failed to add flat');
     }
   };
 
@@ -364,7 +351,7 @@ const CreateInvoice = () => {
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
-      customerId: flat?.user_id || '', // Pass user ID for thermal print
+      customerId: flat?.user_id || '',
       customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
@@ -373,8 +360,9 @@ const CreateInvoice = () => {
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
-      amountReceived: amountReceived.toFixed(2),
+      amountReceived: invoiceStatus === 'paid' ? amountReceived.toFixed(2) : '0.00',
       changeAmount: calculateChange().toFixed(2),
+      status: invoiceStatus,
       yourCompany: businessSettings
     };
     
@@ -400,7 +388,7 @@ const CreateInvoice = () => {
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
-      customerId: flat?.user_id || '', // Pass user ID for image
+      customerId: flat?.user_id || '',
       customerPhone: customer?.phone || '',
       cashierName: cashierName,
       items: selectedProducts,
@@ -409,8 +397,9 @@ const CreateInvoice = () => {
       taxRate: taxRate,
       taxAmount: calculateTax().toFixed(2),
       grandTotal: calculateTotal().toFixed(2),
-      amountReceived: amountReceived.toFixed(2),
+      amountReceived: invoiceStatus === 'paid' ? amountReceived.toFixed(2) : '0.00',
       changeAmount: calculateChange().toFixed(2),
+      status: invoiceStatus,
       yourCompany: businessSettings || { name: '', address: '', phone: '', logo: '' }
     };
     

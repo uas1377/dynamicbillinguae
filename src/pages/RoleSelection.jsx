@@ -62,31 +62,18 @@ const RoleSelection = () => {
       try {
         // Check credentials based on role
         if (role === 'admin') {
-          const { data: adminSettings, error } = await supabase
-            .from('admin_settings')
-            .select('setting_value')
-            .eq('setting_key', 'admin_credentials')
-            .single();
-
-          if (error || !adminSettings) {
-            toast.error('Failed to verify admin credentials');
-            return;
-          }
-
-          const adminCreds = adminSettings.setting_value;
+          // Use localStorage for admin credentials (default: aaa/aaa)
+          const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
           if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
             toast.error('Invalid admin credentials');
             return;
           }
         } else if (role === 'cashier') {
-          const { data: cashiers, error } = await supabase
-            .from('cashiers')
-            .select('*')
-            .eq('username', credentials.username)
-            .eq('password', credentials.password)
-            .single();
-
-          if (error || !cashiers) {
+          // Use localStorage for cashier credentials (default: aaa/aaa)
+          const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
+          const validCashier = cashiers.find(c => c.username === credentials.username && c.password === credentials.password);
+          
+          if (!validCashier) {
             toast.error('Invalid cashier credentials');
             return;
           }
@@ -119,9 +106,11 @@ const RoleSelection = () => {
   };
 
   const openModal = (role) => {
-    // If cashier is default panel, skip login
+    // If cashier is default panel, skip login but use default cashier name
     if (role === 'cashier' && defaultPanel === 'cashier') {
-      sessionStorage.setItem('currentUser', JSON.stringify({ role: 'cashier', username: 'default-cashier' }));
+      const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
+      const defaultCashierName = cashiers[0]?.username || 'Cashier';
+      sessionStorage.setItem('currentUser', JSON.stringify({ role: 'cashier', username: defaultCashierName }));
       navigate('/cashier');
       return;
     }
