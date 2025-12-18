@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Sheet, RefreshCw, CheckCircle, AlertCircle, Settings, Trash2, Save, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { 
+  getStoredProducts, 
+  setStoredProducts, 
+  clearAllProducts 
+} from "@/utils/localStorageData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,14 +72,9 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
     setEditMode(true);
   };
 
-  const handleClearAllProducts = async () => {
+  const handleClearAllProducts = () => {
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      if (error) throw error;
+      clearAllProducts();
       toast.success('All products cleared successfully');
       if (onSyncComplete) onSyncComplete();
     } catch (error) {
@@ -100,8 +99,8 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
     try {
       console.log('Starting sync from Google Sheets...');
       
-      // Fetch directly from Google Sheets API
-      const sheetRange = 'A:F';
+      // Fetch directly from Google Sheets API - Column A to G
+      const sheetRange = 'A:G';
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetRange)}?key=${apiKey}`;
       
       console.log('Fetching from:', url);
@@ -138,6 +137,7 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
                         rows[0]?.[0]?.toString().toLowerCase().includes('product');
       const dataRows = hasHeader ? rows.slice(1) : rows;
       
+      const existingProducts = getStoredProducts();
       let syncedCount = 0;
       let updatedCount = 0;
 
@@ -151,39 +151,42 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
           quantity: parseInt(row[3]) || 0,
           price: parseFloat(row[4]) || 0,
           buying_price: parseFloat(row[5]) || 0,
+          tax_amount: parseFloat(row[6]) || 0, // Tax amount included in price
         };
 
         // Check if product exists by SKU or name
-        const { data: existing } = await supabase
-          .from('products')
-          .select('id')
-          .or(`sku.eq.${productData.sku},name.eq.${productData.name}`)
-          .limit(1);
+        const existingIndex = existingProducts.findIndex(
+          p => (productData.sku && p.sku === productData.sku) || p.name === productData.name
+        );
 
-        if (existing && existing.length > 0) {
+        if (existingIndex >= 0) {
           // Update existing product
-          const { error } = await supabase
-            .from('products')
-            .update(productData)
-            .eq('id', existing[0].id);
-          
-          if (!error) updatedCount++;
+          existingProducts[existingIndex] = {
+            ...existingProducts[existingIndex],
+            ...productData,
+            updated_at: new Date().toISOString()
+          };
+          updatedCount++;
         } else {
           // Insert new product
-          const { error } = await supabase
-            .from('products')
-            .insert(productData);
-          
-          if (!error) syncedCount++;
+          existingProducts.push({
+            id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            ...productData,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          syncedCount++;
         }
       }
+
+      setStoredProducts(existingProducts);
 
       const now = new Date();
       setLastSync(now);
       localStorage.setItem('googleSheetsLastSync', now.toISOString());
 
       toast.success(`Synced: ${syncedCount} new, ${updatedCount} updated`);
-      console.log('Products synced to database:', syncedCount + updatedCount);
+      console.log('Products synced to localStorage:', syncedCount + updatedCount);
       
       if (onSyncComplete) {
         onSyncComplete();
@@ -312,8 +315,9 @@ const GoogleSheetsSync = ({ onSyncComplete }) => {
             <li>• Column B: Barcode</li>
             <li>• Column C: SKU Number</li>
             <li>• Column D: Quantity</li>
-            <li>• Column E: Price (Selling)</li>
+            <li>• Column E: Price (Selling - includes tax)</li>
             <li>• Column F: Buying Price (Cost)</li>
+            <li>• Column G: Tax Amount (included in selling price)</li>
           </ul>
         </div>
 

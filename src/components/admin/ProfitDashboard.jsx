@@ -4,10 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { TrendingUp, DollarSign, Percent, Calendar, Infinity } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { getStoredInvoices } from "@/utils/localStorageData";
 
 const ProfitDashboard = () => {
   const [showAllTime, setShowAllTime] = useState(false);
@@ -27,33 +27,26 @@ const ProfitDashboard = () => {
     loadProfitData();
   }, [startDate, endDate, showAllTime, additionalCosts, extraProfit]);
 
-  const loadProfitData = async () => {
+  const loadProfitData = () => {
     setLoading(true);
     try {
-      let query = supabase.from('invoices').select('*');
+      let invoices = getStoredInvoices();
       
       if (!showAllTime) {
-        query = query.gte('date', startDate).lte('date', endDate + 'T23:59:59');
-      }
-      
-      const { data: invoices, error } = await query;
-
-      if (error) {
-        toast.error('Failed to load invoice data: ' + error.message);
-        return;
+        invoices = invoices.filter(inv => {
+          const invDate = inv.date || inv.created_at;
+          return invDate >= startDate && invDate <= endDate + 'T23:59:59';
+        });
       }
 
       let totalRevenue = 0;
       let totalCost = 0;
 
-      for (const invoice of invoices || []) {
+      for (const invoice of invoices) {
         const items = invoice.items || [];
         
         for (const item of items) {
-          // Revenue is selling price * quantity
           totalRevenue += parseFloat(item.amount || 0) * parseFloat(item.quantity || 0);
-          
-          // Cost is buying_price * quantity
           totalCost += parseFloat(item.buying_price || 0) * parseFloat(item.quantity || 0);
         }
       }

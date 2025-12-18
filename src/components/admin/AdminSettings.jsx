@@ -6,7 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, Save, Building2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { 
+  getBusinessSettings, 
+  setBusinessSettings as saveBusinessSettings,
+  getStoredProducts,
+  getStoredCustomers,
+  getStoredInvoices
+} from "@/utils/localStorageData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,56 +39,39 @@ const AdminSettings = () => {
     phone: '',
     email: '',
     logo: '',
-    defaultPanel: 'role-selection' // 'role-selection' or 'cashier'
+    defaultPanel: 'role-selection'
   });
 
   const [logoFile, setLogoFile] = useState(null);
 
-  // Load settings from Supabase on mount
   useEffect(() => {
     loadSettings();
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('admin_settings')
-        .select('*');
-
-      if (error) {
-        toast.error('Failed to load settings: ' + error.message);
-        return;
-      }
-
-      const settings = {};
-      data.forEach(item => {
-        settings[item.setting_key] = item.setting_value;
-      });
-
-      if (settings.admin_credentials) {
-        setAdminCredentials(prev => ({
-          ...prev,
-          username: settings.admin_credentials.username,
-          password: settings.admin_credentials.password
-        }));
-      }
-
-      if (settings.business_settings) {
-        setBusinessSettings({
-          businessName: settings.business_settings.name || '',
-          address: settings.business_settings.address || '',
-          phone: settings.business_settings.phone || '',
-          email: settings.business_settings.email || '',
-          logo: settings.business_settings.logo || '',
-          defaultPanel: settings.business_settings.defaultPanel || 'role-selection'
-        });
-      }
-    } catch (error) {
-      toast.error('Failed to load settings: ' + error.message);
+  const loadSettings = () => {
+    // Load admin credentials from localStorage
+    const storedAdmins = JSON.parse(localStorage.getItem('admins') || '[]');
+    if (storedAdmins.length > 0) {
+      setAdminCredentials(prev => ({
+        ...prev,
+        username: storedAdmins[0].username,
+        password: storedAdmins[0].password
+      }));
     }
+
+    // Load business settings from localStorage
+    const storedBusinessSettings = getBusinessSettings();
+    setBusinessSettings({
+      businessName: storedBusinessSettings.name || '',
+      address: storedBusinessSettings.address || '',
+      phone: storedBusinessSettings.phone || '',
+      email: storedBusinessSettings.email || '',
+      logo: storedBusinessSettings.logo || '',
+      defaultPanel: storedBusinessSettings.defaultPanel || 'role-selection'
+    });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     
     if (!adminCredentials.username.trim()) {
@@ -95,37 +84,25 @@ const AdminSettings = () => {
       return;
     }
 
-    try {
-      const newCredentials = {
-        username: adminCredentials.username.trim(),
-        password: adminCredentials.newPassword || adminCredentials.password
-      };
+    const newCredentials = {
+      username: adminCredentials.username.trim(),
+      password: adminCredentials.newPassword || adminCredentials.password
+    };
 
-      const { error } = await supabase
-        .from('admin_settings')
-        .update({ setting_value: newCredentials })
-        .eq('setting_key', 'admin_credentials');
-
-      if (error) {
-        toast.error('Failed to update admin settings: ' + error.message);
-        return;
-      }
-      
-      toast.success('Admin settings updated successfully');
-      
-      // Reset form
-      setAdminCredentials({
-        username: newCredentials.username,
-        password: newCredentials.password,
-        newPassword: '',
-        confirmPassword: ''
-      });
-    } catch (error) {
-      toast.error('Failed to update admin settings: ' + error.message);
-    }
+    // Update admins in localStorage
+    localStorage.setItem('admins', JSON.stringify([newCredentials]));
+    
+    toast.success('Admin settings updated successfully');
+    
+    setAdminCredentials({
+      username: newCredentials.username,
+      password: newCredentials.password,
+      newPassword: '',
+      confirmPassword: ''
+    });
   };
 
-  const handleLogoUpload = async (e) => {
+  const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -134,10 +111,16 @@ const AdminSettings = () => {
       return;
     }
 
-    setLogoFile(file);
+    // Convert to base64 and store in localStorage
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBusinessSettings(prev => ({ ...prev, logo: reader.result }));
+      setLogoFile(file);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleBusinessSettingsSubmit = async (e) => {
+  const handleBusinessSettingsSubmit = (e) => {
     e.preventDefault();
     
     if (!businessSettings.businessName.trim()) {
@@ -145,129 +128,37 @@ const AdminSettings = () => {
       return;
     }
 
-    try {
-      let logoUrl = businessSettings.logo;
+    const businessData = {
+      name: businessSettings.businessName,
+      address: businessSettings.address,
+      phone: businessSettings.phone,
+      email: businessSettings.email,
+      logo: businessSettings.logo,
+      defaultPanel: businessSettings.defaultPanel
+    };
 
-      // Upload logo if a new file was selected
-      if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `logo-${Date.now()}.${fileExt}`;
-        
-        // Delete old logo if exists
-        if (businessSettings.logo) {
-          const oldFileName = businessSettings.logo.split('/').pop();
-          await supabase.storage
-            .from('business-logos')
-            .remove([oldFileName]);
-        }
-
-        const { error: uploadError, data } = await supabase.storage
-          .from('business-logos')
-          .upload(fileName, logoFile);
-
-        if (uploadError) {
-          toast.error('Failed to upload logo: ' + uploadError.message);
-          return;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('business-logos')
-          .getPublicUrl(fileName);
-
-        logoUrl = publicUrl;
-      }
-
-      const businessData = {
-        name: businessSettings.businessName,
-        address: businessSettings.address,
-        phone: businessSettings.phone,
-        email: businessSettings.email,
-        logo: logoUrl,
-        defaultPanel: businessSettings.defaultPanel
-      };
-
-      const { error } = await supabase
-        .from('admin_settings')
-        .update({ setting_value: businessData })
-        .eq('setting_key', 'business_settings');
-
-      if (error) {
-        toast.error('Failed to update business settings: ' + error.message);
-        return;
-      }
-
-      setBusinessSettings(prev => ({ ...prev, logo: logoUrl }));
-      setLogoFile(null);
-      toast.success('Business settings updated successfully');
-    } catch (error) {
-      toast.error('Failed to update business settings: ' + error.message);
-    }
+    saveBusinessSettings(businessData);
+    setLogoFile(null);
+    toast.success('Business settings updated successfully');
   };
 
-  const handleClearAllData = async () => {
+  const handleClearAllData = () => {
     try {
-      console.log('Starting data deletion...');
+      // Clear all localStorage data
+      localStorage.removeItem('productsData');
+      localStorage.removeItem('invoicesData');
+      localStorage.removeItem('customersData');
+      localStorage.removeItem('buildingsData');
+      localStorage.removeItem('flatsData');
+      localStorage.removeItem('businessSettings');
+      localStorage.removeItem('cashiers');
       
-      // Delete all invoices first (they reference customers via foreign key)
-      const { data: invoices, error: invoicesError } = await supabase
-        .from('invoices')
-        .delete()
-        .not('id', 'is', null)
-        .select();
+      // Keep admins credentials
       
-      if (invoicesError) {
-        console.error('Error deleting invoices:', invoicesError);
-        toast.error('Failed to delete invoices: ' + invoicesError.message);
-        return;
-      }
-      console.log(`Deleted ${invoices?.length || 0} invoices`);
-
-      // Delete all customers
-      const { data: customers, error: customersError } = await supabase
-        .from('customers')
-        .delete()
-        .not('id', 'is', null)
-        .select();
-      
-      if (customersError) {
-        console.error('Error deleting customers:', customersError);
-        toast.error('Failed to delete customers: ' + customersError.message);
-        return;
-      }
-      console.log(`Deleted ${customers?.length || 0} customers`);
-
-      // Delete all products
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .delete()
-        .not('id', 'is', null)
-        .select();
-      
-      if (productsError) {
-        console.error('Error deleting products:', productsError);
-        toast.error('Failed to delete products: ' + productsError.message);
-        return;
-      }
-      console.log(`Deleted ${products?.length || 0} products`);
-
-      // Clear business settings
-      const { error: businessError } = await supabase
-        .from('admin_settings')
-        .update({ setting_value: {} })
-        .eq('setting_key', 'business_settings');
-      
-      if (businessError) {
-        console.error('Error clearing business settings:', businessError);
-      }
-
-      // Clear localStorage
-      localStorage.clear();
       sessionStorage.clear();
       
-      console.log('All data cleared successfully');
-      toast.success('All data cleared successfully from database!');
+      toast.success('All data cleared successfully!');
       
-      // Reload page after short delay
       setTimeout(() => {
         window.location.href = '/';
       }, 1500);
@@ -463,7 +354,7 @@ const AdminSettings = () => {
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Database:</span>
-              <span>Supabase</span>
+              <span>Local Storage (Offline)</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Last Updated:</span>
@@ -481,20 +372,14 @@ const AdminSettings = () => {
           <div className="space-y-4">
             <Button 
               variant="outline" 
-              onClick={async () => {
+              onClick={() => {
                 try {
-                  const [productsRes, customersRes, invoicesRes, cashiersRes] = await Promise.all([
-                    supabase.from('products').select('*'),
-                    supabase.from('customers').select('*'),
-                    supabase.from('invoices').select('*'),
-                    supabase.from('cashiers').select('*')
-                  ]);
-
                   const data = {
-                    products: productsRes.data || [],
-                    customers: customersRes.data || [],
-                    invoices: invoicesRes.data || [],
-                    cashiers: cashiersRes.data || []
+                    products: getStoredProducts(),
+                    customers: getStoredCustomers(),
+                    invoices: getStoredInvoices(),
+                    cashiers: JSON.parse(localStorage.getItem('cashiers') || '[]'),
+                    businessSettings: getBusinessSettings()
                   };
 
                   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

@@ -11,8 +11,21 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Minus, ShoppingCart, FileText, Printer, Download, Image, ArrowRight, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
+import { 
+  getStoredProducts, 
+  updateProductInStorage,
+  getStoredCustomers,
+  addInvoiceToStorage,
+  generateInvoiceNumber,
+  getBusinessSettings 
+} from "@/utils/localStorageData";
+import {
+  getStoredBuildings,
+  getStoredFlats,
+  addBuildingToStorage,
+  addFlatToStorage
+} from "@/utils/buildingFlatStorage";
 
 const CreateInvoice = () => {
   const [products, setProducts] = useState([]);
@@ -89,43 +102,31 @@ const CreateInvoice = () => {
     };
   }, [barcodeBuffer, products]);
 
-  const loadData = async () => {
+  const loadData = () => {
     try {
-      // Load products from Supabase
-      const [productsRes, customersRes, settingsRes] = await Promise.all([
-        supabase.from('products').select('*').order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('admin_settings').select('*').eq('setting_key', 'business_settings').single(),
-      ]);
-
-      if (productsRes.error) {
-        toast.error('Failed to load products: ' + productsRes.error.message);
-      } else {
-        setProducts(productsRes.data || []);
-      }
-
-      if (customersRes.error) {
-        toast.error('Failed to load customers: ' + customersRes.error.message);
-      } else {
-        setCustomers(customersRes.data || []);
-      }
-
-      if (settingsRes.data?.setting_value) {
-        setBusinessSettings({
-          name: settingsRes.data.setting_value.name || '',
-          address: settingsRes.data.setting_value.address || '',
-          phone: settingsRes.data.setting_value.phone || '',
-          email: settingsRes.data.setting_value.email || '',
-          logo: settingsRes.data.setting_value.logo || ''
-        });
-      }
-
-      // Load buildings from localStorage
-      const { getStoredBuildings, getStoredFlats } = await import('@/utils/buildingFlatStorage');
+      // Load all data from localStorage
+      const storedProducts = getStoredProducts();
+      const storedCustomers = getStoredCustomers();
       const storedBuildings = getStoredBuildings();
+      const storedSettings = getBusinessSettings();
+
+      setProducts(storedProducts);
+      setCustomers(storedCustomers);
       setBuildings(storedBuildings);
+      setBusinessSettings(storedSettings);
     } catch (error) {
       toast.error('Failed to load data: ' + error.message);
+    }
+  };
+
+  const loadFlatsForBuilding = (buildingId) => {
+    try {
+      const allFlats = getStoredFlats();
+      const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
+      setFlats(buildingFlats);
+    } catch (error) {
+      toast.error('Failed to load flats');
+      setFlats([]);
     }
   };
 
@@ -141,16 +142,14 @@ const CreateInvoice = () => {
     }
   };
 
-  const handleAddBuilding = async () => {
+  const handleAddBuilding = () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
       return;
     }
     
     try {
-      const { addBuildingToStorage } = await import('@/utils/buildingFlatStorage');
       const newBuilding = addBuildingToStorage(newBuildingName.trim());
-      
       setBuildings([...buildings, newBuilding]);
       setSelectedBuilding(newBuilding.id);
       setNewBuildingName('');
@@ -161,7 +160,7 @@ const CreateInvoice = () => {
     }
   };
 
-  const handleAddFlat = async () => {
+  const handleAddFlat = () => {
     if (!newFlatNumber.trim()) {
       toast.error('Flat number is required');
       return;
@@ -172,9 +171,7 @@ const CreateInvoice = () => {
     }
     
     try {
-      const { addFlatToStorage } = await import('@/utils/buildingFlatStorage');
       const newFlat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
-      
       setFlats([...flats, newFlat]);
       setSelectedFlat(newFlat.id);
       setNewFlatNumber('');
@@ -219,15 +216,22 @@ const CreateInvoice = () => {
     setSelectedProducts(updatedProducts);
   };
 
-  const updateProductQuantityDirect = (productId, quantity) => {
-    const newQuantity = Math.max(0, parseInt(quantity) || 0);
-    if (newQuantity === 0) {
-      setSelectedProducts(selectedProducts.filter(p => p.id !== productId));
-    } else {
+  // Allow typing quantity directly - don't delete on empty, allow decimals
+  const updateProductQuantityDirect = (productId, value) => {
+    // Allow empty string while typing
+    if (value === '' || value === null || value === undefined) {
       setSelectedProducts(selectedProducts.map(product => 
-        product.id === productId ? { ...product, quantity: newQuantity } : product
+        product.id === productId ? { ...product, quantity: 0, quantityInput: '' } : product
       ));
+      return;
     }
+    
+    const newQuantity = parseFloat(value);
+    if (isNaN(newQuantity)) return;
+    
+    setSelectedProducts(selectedProducts.map(product => 
+      product.id === productId ? { ...product, quantity: Math.max(0, newQuantity), quantityInput: value } : product
+    ));
   };
 
   const calculateSubtotal = () => {
@@ -250,24 +254,11 @@ const CreateInvoice = () => {
     return change > 0 ? change : 0;
   };
 
-  const generateInvoiceNumber = async () => {
-    try {
-      const { data } = await supabase
-        .from('invoices')
-        .select('invoice_number')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const lastNumber = data && data.length > 0 ? 
-        parseInt(data[0].invoice_number.replace('glxy', '')) : 0;
-      return `glxy${String(lastNumber + 1).padStart(4, '0')}`;
-    } catch (error) {
-      const timestamp = Date.now();
-      return `glxy${String(timestamp).slice(-4)}`;
-    }
+  const getNextInvoiceNumber = () => {
+    return generateInvoiceNumber();
   };
 
-  const saveInvoice = async () => {
+  const saveInvoice = () => {
     if (selectedProducts.length === 0) {
       toast.error('Please add at least one product to the invoice');
       return;
@@ -280,7 +271,7 @@ const CreateInvoice = () => {
     }
 
     try {
-      const invoiceNumber = await generateInvoiceNumber();
+      const invoiceNumber = getNextInvoiceNumber();
       const customer = getCustomerFromSelection();
       const building = buildings.find(b => b.id === selectedBuilding);
       const flat = flats.find(f => f.id === selectedFlat);
@@ -295,30 +286,23 @@ const CreateInvoice = () => {
         tax_rate: taxRate,
         tax_amount: calculateTax(),
         grand_total: calculateTotal(),
-        status: invoiceStatus
+        status: invoiceStatus,
+        amount_received: invoiceStatus === 'paid' ? amountReceived : 0,
+        change_amount: calculateChange(),
+        cashier_name: cashierName,
+        date: new Date().toISOString()
       };
 
-      const { error: invoiceError } = await supabase
-        .from('invoices')
-        .insert(newInvoice);
+      addInvoiceToStorage(newInvoice);
 
-      if (invoiceError) {
-        toast.error('Failed to save invoice: ' + invoiceError.message);
-        return;
-      }
-
-      const updatePromises = selectedProducts.map(async (soldProduct) => {
+      // Update product quantities in localStorage
+      selectedProducts.forEach((soldProduct) => {
         const product = products.find(p => p.id === soldProduct.id);
         if (product) {
           const newQuantity = Math.max(0, product.quantity - soldProduct.quantity);
-          return supabase
-            .from('products')
-            .update({ quantity: newQuantity })
-            .eq('id', product.id);
+          updateProductInStorage(product.id, { quantity: newQuantity });
         }
       });
-
-      await Promise.all(updatePromises);
       
       toast.success(`Invoice ${invoiceNumber} saved successfully`);
       
@@ -331,7 +315,7 @@ const CreateInvoice = () => {
       setInvoiceStatus('paid');
       setAmountReceived(0);
       setShowCheckoutDialog(false);
-      await loadData();
+      loadData();
     } catch (error) {
       toast.error('Failed to save invoice: ' + error.message);
     }
@@ -343,7 +327,7 @@ const CreateInvoice = () => {
       return;
     }
     
-    const invoiceNumber = await generateInvoiceNumber();
+    const invoiceNumber = getNextInvoiceNumber();
     const customer = getCustomerFromSelection();
     const building = buildings.find(b => b.id === selectedBuilding);
     const flat = flats.find(f => f.id === selectedFlat);
@@ -380,7 +364,7 @@ const CreateInvoice = () => {
       return;
     }
     
-    const invoiceNumber = await generateInvoiceNumber();
+    const invoiceNumber = getNextInvoiceNumber();
     const customer = getCustomerFromSelection();
     const building = buildings.find(b => b.id === selectedBuilding);
     const flat = flats.find(f => f.id === selectedFlat);
@@ -574,10 +558,11 @@ const CreateInvoice = () => {
                           </Button>
                           <Input
                             type="number"
-                            value={product.quantity}
+                            value={product.quantityInput !== undefined ? product.quantityInput : product.quantity}
                             onChange={(e) => updateProductQuantityDirect(product.id, e.target.value)}
-                            className="w-12 h-6 text-xs text-center p-1"
-                            min="1"
+                            className="w-14 h-6 text-xs text-center p-1"
+                            min="0"
+                            step="0.01"
                           />
                           <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
                             <Plus className="w-3 h-3" />
