@@ -378,7 +378,11 @@ const AdminSettings = () => {
                     products: getStoredProducts(),
                     customers: getStoredCustomers(),
                     invoices: getStoredInvoices(),
+                    buildings: JSON.parse(localStorage.getItem('buildingsData') || '[]'),
+                    flats: JSON.parse(localStorage.getItem('flatsData') || '[]'),
                     cashiers: JSON.parse(localStorage.getItem('cashiers') || '[]'),
+                    admins: JSON.parse(localStorage.getItem('admins') || '[]'),
+                    adminCredentials: JSON.parse(localStorage.getItem('adminCredentials') || '{}'),
                     businessSettings: getBusinessSettings()
                   };
 
@@ -397,6 +401,43 @@ const AdminSettings = () => {
             >
               Export Data
             </Button>
+            
+            <div className="space-y-2">
+              <Label htmlFor="import-file">Import Data</Label>
+              <Input
+                id="import-file"
+                type="file"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const data = JSON.parse(event.target.result);
+                      
+                      if (data.products) localStorage.setItem('productsData', JSON.stringify(data.products));
+                      if (data.customers) localStorage.setItem('customersData', JSON.stringify(data.customers));
+                      if (data.invoices) localStorage.setItem('invoicesData', JSON.stringify(data.invoices));
+                      if (data.buildings) localStorage.setItem('buildingsData', JSON.stringify(data.buildings));
+                      if (data.flats) localStorage.setItem('flatsData', JSON.stringify(data.flats));
+                      if (data.cashiers) localStorage.setItem('cashiers', JSON.stringify(data.cashiers));
+                      if (data.admins) localStorage.setItem('admins', JSON.stringify(data.admins));
+                      if (data.adminCredentials) localStorage.setItem('adminCredentials', JSON.stringify(data.adminCredentials));
+                      if (data.businessSettings) localStorage.setItem('businessSettings', JSON.stringify(data.businessSettings));
+                      
+                      toast.success('Data imported successfully!');
+                      setTimeout(() => window.location.reload(), 1000);
+                    } catch (error) {
+                      toast.error('Invalid backup file format');
+                    }
+                  };
+                  reader.readAsText(file);
+                  e.target.value = '';
+                }}
+              />
+            </div>
             
             <AlertDialog>
               <AlertDialogTrigger asChild>

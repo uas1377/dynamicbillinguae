@@ -1,38 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, ShoppingCart, Shield, KeyRound } from "lucide-react";
+import { User, ShoppingCart, Shield, KeyRound, QrCode } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { getFlatByUserId, getStoredBuildings } from "@/utils/buildingFlatStorage";
+import { getBusinessSettings } from "@/utils/localStorageData";
+import BarcodeScanner from "@/components/ui/BarcodeScanner";
 
 const RoleSelection = () => {
   const [loginModal, setLoginModal] = useState(null);
   const [credentials, setCredentials] = useState({ username: '', password: '', userId: '' });
   const [defaultPanel, setDefaultPanel] = useState(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const navigate = useNavigate();
 
-  // Check default panel setting on mount
-  React.useEffect(() => {
-    const checkDefaultPanel = async () => {
-      const { data: businessSettings } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'business_settings')
-        .single();
-        
-      if (businessSettings?.setting_value?.defaultPanel) {
-        setDefaultPanel(businessSettings.setting_value.defaultPanel);
+  // Initialize default credentials on first load
+  useEffect(() => {
+    // Set default admin credentials if not exists
+    if (!localStorage.getItem('adminCredentials')) {
+      localStorage.setItem('adminCredentials', JSON.stringify({ username: 'aaa', password: 'aaa' }));
+    }
+    // Set default cashier if not exists
+    if (!localStorage.getItem('cashiers')) {
+      localStorage.setItem('cashiers', JSON.stringify([{ id: 'default', username: 'aaa', password: 'aaa' }]));
+    }
+  }, []);
+
+  // Check default panel setting on mount - using localStorage only
+  useEffect(() => {
+    const checkDefaultPanel = () => {
+      const businessSettings = getBusinessSettings();
+      if (businessSettings?.defaultPanel) {
+        setDefaultPanel(businessSettings.defaultPanel);
       }
     };
     checkDefaultPanel();
   }, []);
 
-  const handleLogin = async (role) => {
+  const handleQRScan = (scannedCode) => {
+    if (scannedCode && scannedCode.length >= 6) {
+      const username = scannedCode.substring(0, 6);
+      const password = scannedCode.substring(6);
+      
+      // Validate cashier credentials
+      const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
+      const validCashier = cashiers.find(c => c.username === username && c.password === password);
+      
+      if (validCashier) {
+        sessionStorage.setItem('currentUser', JSON.stringify({ role: 'cashier', username: username }));
+        toast.success('Login successful via QR code');
+        navigate('/cashier');
+        setLoginModal(null);
+      } else {
+        toast.error('Invalid QR code credentials');
+      }
+    } else {
+      toast.error('Invalid QR code format. Must be at least 6 characters.');
+    }
+    setShowQRScanner(false);
+  };
+
+  const handleLogin = (role) => {
     if (role === 'customer') {
       if (!credentials.userId.trim()) {
         toast.error('Please enter your User ID');
@@ -59,47 +91,27 @@ const RoleSelection = () => {
       }));
       navigate('/customer');
     } else {
-      try {
-        // Check credentials based on role
-        if (role === 'admin') {
-          // Use localStorage for admin credentials (default: aaa/aaa)
-          const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
-          if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
-            toast.error('Invalid admin credentials');
-            return;
-          }
-        } else if (role === 'cashier') {
-          // Use localStorage for cashier credentials (default: aaa/aaa)
-          const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
-          const validCashier = cashiers.find(c => c.username === credentials.username && c.password === credentials.password);
-          
-          if (!validCashier) {
-            toast.error('Invalid cashier credentials');
-            return;
-          }
-          
-          // Check for default panel setting for cashier
-          const { data: businessSettings } = await supabase
-            .from('admin_settings')
-            .select('setting_value')
-            .eq('setting_key', 'business_settings')
-            .single();
-            
-          if (businessSettings?.setting_value?.defaultPanel === 'cashier') {
-            sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
-            navigate('/cashier');
-            setLoginModal(null);
-            setCredentials({ username: '', password: '', userId: '' });
-            return;
-          }
+      // Check credentials based on role
+      if (role === 'admin') {
+        // Use localStorage for admin credentials (default: aaa/aaa)
+        const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
+        if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
+          toast.error('Invalid admin credentials');
+          return;
         }
+      } else if (role === 'cashier') {
+        // Use localStorage for cashier credentials (default: aaa/aaa)
+        const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
+        const validCashier = cashiers.find(c => c.username === credentials.username && c.password === credentials.password);
         
-        sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
-        navigate(`/${role}`);
-      } catch (error) {
-        toast.error('Login failed: ' + error.message);
-        return;
+        if (!validCashier) {
+          toast.error('Invalid cashier credentials');
+          return;
+        }
       }
+      
+      sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
+      navigate(`/${role}`);
     }
     setLoginModal(null);
     setCredentials({ username: '', password: '', userId: '' });
@@ -124,7 +136,7 @@ const RoleSelection = () => {
         <Card className="gradient-card shadow-soft border-0 mb-8">
           <CardHeader className="text-center pb-8">
             <CardTitle className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Billing Management System
+              Galaxy Billing App
             </CardTitle>
             <CardDescription className="text-xl text-muted-foreground">
               Select your role to access the system
@@ -227,6 +239,17 @@ const RoleSelection = () => {
                     onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
                   />
                 </div>
+                
+                {loginModal === 'cashier' && (
+                  <Button 
+                    onClick={() => setShowQRScanner(true)} 
+                    variant="outline"
+                    className="w-full flex items-center gap-2"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    Scan QR Code to Login
+                  </Button>
+                )}
               </>
             )}
             <Button 
@@ -238,6 +261,12 @@ const RoleSelection = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <BarcodeScanner 
+        open={showQRScanner} 
+        onClose={() => setShowQRScanner(false)} 
+        onScan={handleQRScan} 
+      />
     </div>
   );
 };
