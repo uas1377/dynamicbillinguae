@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, Filter, Search, Printer, Download } from "lucide-react";
+import { FileText, Filter, Search, Printer, Download, Clock, User } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -75,7 +75,8 @@ const AllInvoices = () => {
       filtered = filtered.filter(invoice =>
         invoice.invoice_number.toLowerCase().includes(search) ||
         (invoice.customer_name && invoice.customer_name.toLowerCase().includes(search)) ||
-        (invoice.customer_phone && invoice.customer_phone.includes(search))
+        (invoice.customer_phone && invoice.customer_phone.includes(search)) ||
+        (invoice.cashier_name && invoice.cashier_name.toLowerCase().includes(search))
       );
     }
 
@@ -89,20 +90,28 @@ const AllInvoices = () => {
     }
 
     // Create CSV header
-    const headers = ['Invoice Number', 'Date', 'Customer Name', 'Customer Phone', 'Status', 'Items', 'Total Amount'];
+    const headers = ['Invoice Number', 'Date', 'Time', 'Cashier', 'Customer Name', 'Customer Phone', 'Status', 'Items', 'Subtotal', 'Amount Paid', 'Change', 'Total Amount'];
     
     // Create CSV rows
     const rows = filteredInvoices.map(invoice => {
-      const date = new Date(invoice.created_at).toLocaleDateString();
-      const items = invoice.items.map(item => `${item.name} (${item.quantity})`).join('; ');
+      const dateTime = new Date(invoice.created_at);
+      const date = dateTime.toLocaleDateString();
+      const time = dateTime.toLocaleTimeString();
+      const items = invoice.items.map(item => `${item.sku || ''} ${item.name} (${item.quantity})`).join('; ');
+      const amountPaid = invoice.status === 'unpaid' ? '0 (unpaid)' : (invoice.amount_received || invoice.grand_total);
       return [
         invoice.invoice_number,
         date,
+        time,
+        invoice.cashier_name || 'N/A',
         invoice.customer_name || 'N/A',
         invoice.customer_phone || 'N/A',
         invoice.status,
         items,
-        invoice.total_amount
+        invoice.sub_total,
+        amountPaid,
+        invoice.change_amount || 0,
+        invoice.grand_total
       ];
     });
 
@@ -166,7 +175,11 @@ const AllInvoices = () => {
       discountAmount: invoice.discount_amount || 0,
       taxRate: invoice.tax_rate || 0,
       taxAmount: invoice.tax_amount || 0,
-      grandTotal: invoice.grand_total
+      grandTotal: invoice.grand_total,
+      amountReceived: invoice.amount_received || invoice.grand_total,
+      changeAmount: invoice.change_amount || 0,
+      cashierName: invoice.cashier_name || '',
+      status: invoice.status
     };
     
     try {
@@ -187,7 +200,11 @@ const AllInvoices = () => {
       discountAmount: invoice.discount_amount || 0,
       taxRate: invoice.tax_rate || 0,
       taxAmount: invoice.tax_amount || 0,
-      grandTotal: invoice.grand_total
+      grandTotal: invoice.grand_total,
+      amountReceived: invoice.amount_received || invoice.grand_total,
+      changeAmount: invoice.change_amount || 0,
+      cashierName: invoice.cashier_name || '',
+      status: invoice.status
     };
     
     try {
@@ -196,6 +213,14 @@ const AllInvoices = () => {
     } catch (error) {
       toast.error('Failed to save invoice as image');
     }
+  };
+
+  const formatDateTime = (dateString) => {
+    const date = new Date(dateString);
+    return {
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
   };
 
   return (
@@ -310,93 +335,115 @@ const AllInvoices = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredInvoices.map((invoice) => (
-                <Card key={invoice.id} className="border shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-lg">#{invoice.invoice_number}</h3>
-                        <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
-                          {invoice.status.toUpperCase()}
-                        </Badge>
+              {filteredInvoices.map((invoice) => {
+                const { date, time } = formatDateTime(invoice.created_at || invoice.date);
+                const amountPaid = invoice.status === 'unpaid' ? '0.00 (unpaid)' : formatCurrency(invoice.amount_received || invoice.grand_total);
+                
+                return (
+                  <Card key={invoice.id} className="border shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-semibold text-lg">#{invoice.invoice_number}</h3>
+                          <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
+                            {invoice.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+                          <Button
+                            onClick={() => printInvoice(invoice)}
+                            size="sm"
+                            variant="outline"
+                            className="flex items-center gap-1 w-full sm:w-auto"
+                          >
+                            <Printer className="w-3 h-3" />
+                            Print
+                          </Button>
+                          
+                          <Button
+                            onClick={() => saveInvoiceAsImage(invoice)}
+                            size="sm"
+                            variant="outline"
+                            className="flex items-center gap-1 w-full sm:w-auto"
+                          >
+                            <Download className="w-3 h-3" />
+                            Save
+                          </Button>
+                          
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor={`status-${invoice.id}`} className="text-sm">
+                              {invoice.status === 'paid' ? 'Paid' : 'Unpaid'}
+                            </Label>
+                            <Switch
+                              id={`status-${invoice.id}`}
+                              checked={invoice.status === 'paid'}
+                              onCheckedChange={() => toggleInvoiceStatus(invoice.id, invoice.status)}
+                            />
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total)}</p>
+                          </div>
+                        </div>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-                        <Button
-                          onClick={() => printInvoice(invoice)}
-                          size="sm"
-                          variant="outline"
-                          className="flex items-center gap-1 w-full sm:w-auto"
-                        >
-                          <Printer className="w-3 h-3" />
-                          Print
-                        </Button>
-                        
-                        <Button
-                          onClick={() => saveInvoiceAsImage(invoice)}
-                          size="sm"
-                          variant="outline"
-                          className="flex items-center gap-1 w-full sm:w-auto"
-                        >
-                          <Download className="w-3 h-3" />
-                          Save
-                        </Button>
-                        
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`status-${invoice.id}`} className="text-sm">
-                            {invoice.status === 'paid' ? 'Paid' : 'Unpaid'}
-                          </Label>
-                          <Switch
-                            id={`status-${invoice.id}`}
-                            checked={invoice.status === 'paid'}
-                            onCheckedChange={() => toggleInvoiceStatus(invoice.id, invoice.status)}
-                          />
+                      <div className="grid md:grid-cols-3 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span className="font-medium">Date:</span> {date} at {time}
+                          </p>
+                          <p className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            <span className="font-medium">Cashier:</span> {invoice.cashier_name || 'N/A'}
+                          </p>
+                          {invoice.customer_name && (
+                            <p><span className="font-medium">Customer:</span> {invoice.customer_name}</p>
+                          )}
+                          {invoice.customer_phone && (
+                            <p><span className="font-medium">Phone:</span> {invoice.customer_phone}</p>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total)}</p>
+                        
+                        <div className="space-y-1">
+                          <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
+                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
+                          {parseFloat(invoice.discount_amount || 0) > 0 && (
+                            <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
+                          )}
+                          {parseFloat(invoice.tax_amount) > 0 && (
+                            <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount)}</p>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <p><span className="font-medium">Amount Paid:</span> {amountPaid}</p>
+                          {invoice.status === 'paid' && parseFloat(invoice.change_amount || 0) > 0 && (
+                            <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount)}</p>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1">
-                        <p><span className="font-medium">Date:</span> {new Date(invoice.date).toLocaleDateString()}</p>
-                        {invoice.customer_name && (
-                          <p><span className="font-medium">Customer:</span> {invoice.customer_name}</p>
-                        )}
-                        {invoice.customer_phone && (
-                          <p><span className="font-medium">Phone:</span> {invoice.customer_phone}</p>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                        <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
-                        {parseFloat(invoice.discount_amount || 0) > 0 && (
-                          <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
-                        )}
-                        {parseFloat(invoice.tax_amount) > 0 && (
-                          <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount)}</p>
-                        )}
-                      </div>
-                    </div>
 
-                    {invoice.items.length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <p className="font-medium mb-2">Items:</p>
-                        <div className="grid gap-1 text-sm">
-                          {invoice.items.map((item, index) => (
-                            <div key={index} className="flex justify-between">
-                              <span>{item.name} x {item.quantity}</span>
-                              <span>{formatCurrency(item.quantity * item.amount)}</span>
-                            </div>
-                          ))}
+                      {invoice.items.length > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                          <p className="font-medium mb-2">Items:</p>
+                          <div className="grid gap-1 text-sm">
+                            {invoice.items.map((item, index) => (
+                              <div key={index} className="flex justify-between">
+                                <span>
+                                  {item.sku && <span className="text-muted-foreground mr-2">[{item.sku}]</span>}
+                                  {item.name} x {item.quantity}
+                                </span>
+                                <span>{formatCurrency(item.quantity * item.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </CardContent>

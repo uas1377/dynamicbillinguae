@@ -153,12 +153,25 @@ export const addCustomerToStorage = (customer) => {
 
 // Business Settings
 export const getBusinessSettings = () => {
-  if (!hasWindow()) return { name: '', address: '', phone: '', email: '', logo: '' };
+  if (!hasWindow()) return { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection' };
   const raw = window.localStorage.getItem(BUSINESS_SETTINGS_KEY);
-  return safeParse(raw, { name: '', address: '', phone: '', email: '', logo: '' });
+  return safeParse(raw, { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection' });
 };
 
 export const setBusinessSettings = (settings) => {
   if (!hasWindow()) return;
   window.localStorage.setItem(BUSINESS_SETTINGS_KEY, JSON.stringify(settings));
+};
+
+// Buildings & Flats (re-export from buildingFlatStorage for convenience)
+export const getStoredBuildings = () => {
+  if (!hasWindow()) return [];
+  const raw = window.localStorage.getItem('buildingsData');
+  return safeParse(raw, []);
+};
+
+export const getStoredFlats = () => {
+  if (!hasWindow()) return [];
+  const raw = window.localStorage.getItem('flatsData');
+  return safeParse(raw, []);
 };
