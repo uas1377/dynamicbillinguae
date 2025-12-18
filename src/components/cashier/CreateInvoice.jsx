@@ -130,18 +130,6 @@ const CreateInvoice = () => {
     }
   };
 
-  const loadFlatsForBuilding = async (buildingId) => {
-    try {
-      const { getStoredFlats } = await import('@/utils/buildingFlatStorage');
-      const allFlats = getStoredFlats();
-      const buildingFlats = allFlats.filter(f => f.building_id === buildingId);
-      setFlats(buildingFlats);
-    } catch (error) {
-      toast.error('Failed to load flats');
-      setFlats([]);
-    }
-  };
-
   const handleAddBuilding = () => {
     if (!newBuildingName.trim()) {
       toast.error('Building name is required');
