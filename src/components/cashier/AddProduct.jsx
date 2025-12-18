@@ -5,8 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Package, Plus, Edit2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { 
+  getStoredProducts, 
+  addProductToStorage, 
+  updateProductInStorage, 
+  deleteProductFromStorage 
+} from "@/utils/localStorageData";
 
 const AddProduct = () => {
   const [product, setProduct] = useState({
@@ -15,7 +20,8 @@ const AddProduct = () => {
     sku: '',
     quantity: '',
     price: '',
-    buyingPrice: ''
+    buyingPrice: '',
+    taxAmount: ''
   });
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -24,25 +30,12 @@ const AddProduct = () => {
     loadProducts();
   }, []);
 
-  const loadProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast.error('Failed to load products: ' + error.message);
-        return;
-      }
-
-      setProducts(data || []);
-    } catch (error) {
-      toast.error('Failed to load products: ' + error.message);
-    }
+  const loadProducts = () => {
+    const storedProducts = getStoredProducts();
+    setProducts(storedProducts);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     
     if (!product.name.trim()) {
@@ -53,47 +46,34 @@ const AddProduct = () => {
     try {
       if (editingProduct) {
         // Update existing product
-        const { error } = await supabase
-          .from('products')
-          .update({
-            name: product.name.trim(),
-            barcode: product.barcode.trim() || null,
-            sku: product.sku.trim() || null,
-            quantity: parseInt(product.quantity) || 0,
-            price: parseFloat(product.price) || 0,
-            buying_price: parseFloat(product.buyingPrice) || 0
-          })
-          .eq('id', editingProduct.id);
-
-        if (error) {
-          toast.error('Failed to update product: ' + error.message);
-          return;
-        }
+        updateProductInStorage(editingProduct.id, {
+          name: product.name.trim(),
+          barcode: product.barcode.trim() || null,
+          sku: product.sku.trim() || null,
+          quantity: parseInt(product.quantity) || 0,
+          price: parseFloat(product.price) || 0,
+          buying_price: parseFloat(product.buyingPrice) || 0,
+          tax_amount: parseFloat(product.taxAmount) || 0
+        });
 
         toast.success('Product updated successfully');
         setEditingProduct(null);
       } else {
         // Add new product
-        const { error } = await supabase
-          .from('products')
-          .insert({
-            name: product.name.trim(),
-            barcode: product.barcode.trim() || null,
-            sku: product.sku.trim() || null,
-            quantity: parseInt(product.quantity) || 0,
-            price: parseFloat(product.price) || 0,
-            buying_price: parseFloat(product.buyingPrice) || 0
-          });
-
-        if (error) {
-          toast.error('Failed to add product: ' + error.message);
-          return;
-        }
+        addProductToStorage({
+          name: product.name.trim(),
+          barcode: product.barcode.trim() || null,
+          sku: product.sku.trim() || null,
+          quantity: parseInt(product.quantity) || 0,
+          price: parseFloat(product.price) || 0,
+          buying_price: parseFloat(product.buyingPrice) || 0,
+          tax_amount: parseFloat(product.taxAmount) || 0
+        });
 
         toast.success('Product added successfully');
       }
 
-      setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '' });
+      setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '', taxAmount: '' });
       loadProducts();
     } catch (error) {
       toast.error(`Failed to ${editingProduct ? 'update' : 'add'} product: ` + error.message);
@@ -105,34 +85,26 @@ const AddProduct = () => {
       name: productToEdit.name,
       barcode: productToEdit.barcode || '',
       sku: productToEdit.sku || '',
-      quantity: productToEdit.quantity.toString(),
-      price: productToEdit.price.toString(),
-      buyingPrice: productToEdit.buying_price?.toString() || ''
+      quantity: productToEdit.quantity?.toString() || '',
+      price: productToEdit.price?.toString() || '',
+      buyingPrice: productToEdit.buying_price?.toString() || '',
+      taxAmount: productToEdit.tax_amount?.toString() || ''
     });
     setEditingProduct(productToEdit);
   };
 
   const handleCancelEdit = () => {
-    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '' });
+    setProduct({ name: '', barcode: '', sku: '', quantity: '', price: '', buyingPrice: '', taxAmount: '' });
     setEditingProduct(null);
   };
 
-  const handleDelete = async (productId) => {
+  const handleDelete = (productId) => {
     if (!confirm('Are you sure you want to delete this product?')) {
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
-
-      if (error) {
-        toast.error('Failed to delete product: ' + error.message);
-        return;
-      }
-
+      deleteProductFromStorage(productId);
       toast.success('Product deleted successfully');
       loadProducts();
     } catch (error) {
@@ -196,13 +168,26 @@ const AddProduct = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="price">Selling Price</Label>
+                <Label htmlFor="price">Selling Price (includes tax)</Label>
                 <Input
                   id="price"
                   type="number"
                   placeholder="Enter selling price"
                   value={product.price}
                   onChange={(e) => setProduct({ ...product, price: e.target.value })}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="taxAmount">Tax Amount (included in price)</Label>
+                <Input
+                  id="taxAmount"
+                  type="number"
+                  placeholder="Enter tax amount"
+                  value={product.taxAmount}
+                  onChange={(e) => setProduct({ ...product, taxAmount: e.target.value })}
                   min="0"
                   step="0.01"
                 />
@@ -265,6 +250,7 @@ const AddProduct = () => {
                           {prod.sku && <p><span className="font-medium">SKU:</span> {prod.sku}</p>}
                           <p><span className="font-medium">Quantity:</span> {prod.quantity}</p>
                           <p><span className="font-medium">Price:</span> {formatCurrency(prod.price)}</p>
+                          {prod.tax_amount > 0 && <p><span className="font-medium">Tax (incl.):</span> {formatCurrency(prod.tax_amount)}</p>}
                         </div>
                       </div>
                       

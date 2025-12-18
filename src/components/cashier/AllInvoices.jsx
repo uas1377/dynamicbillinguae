@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { FileText, Filter, Search, Printer, Download } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
+import { 
+  getStoredInvoices, 
+  setStoredInvoices,
+  getStoredCustomers 
+} from "@/utils/localStorageData";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
@@ -32,40 +36,14 @@ const AllInvoices = () => {
     applyFilters();
   }, [invoices, filters]);
 
-  const loadInvoices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast.error('Failed to load invoices: ' + error.message);
-        return;
-      }
-
-      setInvoices(data || []);
-    } catch (error) {
-      toast.error('Failed to load invoices: ' + error.message);
-    }
+  const loadInvoices = () => {
+    const storedInvoices = getStoredInvoices();
+    setInvoices(storedInvoices);
   };
 
-  const loadCustomers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast.error('Failed to load customers: ' + error.message);
-        return;
-      }
-
-      setCustomers(data || []);
-    } catch (error) {
-      toast.error('Failed to load customers: ' + error.message);
-    }
+  const loadCustomers = () => {
+    const storedCustomers = getStoredCustomers();
+    setCustomers(storedCustomers);
   };
 
   const applyFilters = () => {
@@ -166,29 +144,16 @@ const AllInvoices = () => {
     return months;
   };
 
-  const toggleInvoiceStatus = async (invoiceId, currentStatus) => {
+  const toggleInvoiceStatus = (invoiceId, currentStatus) => {
     const newStatus = currentStatus === 'paid' ? 'unpaid' : 'paid';
     
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({ status: newStatus })
-        .eq('id', invoiceId);
-
-      if (error) {
-        toast.error('Failed to update invoice status: ' + error.message);
-        return;
-      }
-
-      const updatedInvoices = invoices.map(invoice =>
-        invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
-      );
-      
-      setInvoices(updatedInvoices);
-      toast.success(`Invoice status updated to ${newStatus}`);
-    } catch (error) {
-      toast.error('Failed to update invoice status: ' + error.message);
-    }
+    const updatedInvoices = invoices.map(invoice =>
+      invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
+    );
+    
+    setStoredInvoices(updatedInvoices);
+    setInvoices(updatedInvoices);
+    toast.success(`Invoice status updated to ${newStatus}`);
   };
 
   const printInvoice = async (invoice) => {
