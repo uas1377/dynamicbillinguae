@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,11 @@ import AllInvoices from "@/components/cashier/AllInvoices";
 const CashierPanel = () => {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
+  
+  // Lifted invoice tabs state to persist across main tab switches
+  const [invoiceTabs, setInvoiceTabs] = useState([{ id: 1, name: 'Tab 1' }]);
+  const [activeInvoiceTab, setActiveInvoiceTab] = useState(1);
+  const [nextInvoiceTabId, setNextInvoiceTabId] = useState(2);
 
   useEffect(() => {
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
@@ -26,6 +31,39 @@ const CashierPanel = () => {
     sessionStorage.clear();
     navigate('/');
   };
+
+  const addNewInvoiceTab = useCallback(() => {
+    const newTab = { id: nextInvoiceTabId, name: `Tab ${nextInvoiceTabId}` };
+    setInvoiceTabs(prev => [...prev, newTab]);
+    setActiveInvoiceTab(nextInvoiceTabId);
+    setNextInvoiceTabId(prev => prev + 1);
+  }, [nextInvoiceTabId]);
+
+  const closeInvoiceTab = useCallback((tabId) => {
+    setInvoiceTabs(prev => {
+      if (prev.length === 1) {
+        // If it's the last tab, reset it
+        const newId = nextInvoiceTabId;
+        setActiveInvoiceTab(newId);
+        setNextInvoiceTabId(id => id + 1);
+        return [{ id: newId, name: `Tab ${newId}` }];
+      }
+
+      const tabIndex = prev.findIndex(t => t.id === tabId);
+      const newTabs = prev.filter(t => t.id !== tabId);
+      
+      // If closing active tab, switch to adjacent tab
+      if (activeInvoiceTab === tabId) {
+        if (tabIndex > 0) {
+          setActiveInvoiceTab(newTabs[tabIndex - 1].id);
+        } else {
+          setActiveInvoiceTab(newTabs[0].id);
+        }
+      }
+      
+      return newTabs;
+    });
+  }, [activeInvoiceTab, nextInvoiceTabId]);
 
   if (!currentUser) return null;
 
@@ -74,7 +112,13 @@ const CashierPanel = () => {
             </TabsContent>
 
           <TabsContent value="create-invoice">
-            <CreateInvoiceTabs />
+            <CreateInvoiceTabs 
+              tabs={invoiceTabs}
+              activeTab={activeInvoiceTab}
+              setActiveTab={setActiveInvoiceTab}
+              addNewTab={addNewInvoiceTab}
+              closeTab={closeInvoiceTab}
+            />
           </TabsContent>
 
           <TabsContent value="all-invoices">
