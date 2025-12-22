@@ -1,49 +1,19 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import InvoiceTab from "./InvoiceTab";
 
-const CreateInvoiceTabs = () => {
-  const [tabs, setTabs] = useState([{ id: 1, name: 'Tab 1' }]);
-  const [activeTab, setActiveTab] = useState(1);
-  const [nextTabId, setNextTabId] = useState(2);
+const CreateInvoiceTabs = ({ tabs, activeTab, setActiveTab, addNewTab, closeTab }) => {
 
-  const addNewTab = () => {
-    const newTab = { id: nextTabId, name: `Tab ${nextTabId}` };
-    setTabs([...tabs, newTab]);
-    setActiveTab(nextTabId);
-    setNextTabId(nextTabId + 1);
-  };
-
-  const closeTab = (tabId, e) => {
+  const handleCloseTab = (tabId, e) => {
     e.stopPropagation();
-    
-    if (tabs.length === 1) {
-      // If it's the last tab, just reset it
-      setTabs([{ id: nextTabId, name: `Tab ${nextTabId}` }]);
-      setActiveTab(nextTabId);
-      setNextTabId(nextTabId + 1);
-      return;
-    }
-
-    const tabIndex = tabs.findIndex(t => t.id === tabId);
-    const newTabs = tabs.filter(t => t.id !== tabId);
-    setTabs(newTabs);
-
-    // If closing active tab, switch to adjacent tab
-    if (activeTab === tabId) {
-      if (tabIndex > 0) {
-        setActiveTab(newTabs[tabIndex - 1].id);
-      } else {
-        setActiveTab(newTabs[0].id);
-      }
-    }
+    closeTab(tabId);
   };
 
   const handleInvoiceSaved = useCallback((tabId) => {
-    closeTab(tabId, { stopPropagation: () => {} });
-  }, [tabs]);
+    closeTab(tabId);
+  }, [closeTab]);
 
   return (
     <div className="space-y-4">
@@ -65,7 +35,7 @@ const CreateInvoiceTabs = () => {
                 {tab.name}
               </span>
               <button
-                onClick={(e) => closeTab(tab.id, e)}
+                onClick={(e) => handleCloseTab(tab.id, e)}
                 className={cn(
                   "p-0.5 rounded hover:bg-destructive/20 transition-colors",
                   activeTab === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
