@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Package, Users, FileText, List, LogOut } from "lucide-react";
 import AddProduct from "@/components/cashier/AddProduct";
 import CustomerManagement from "@/components/cashier/CustomerManagement";
-import CreateInvoice from "@/components/cashier/CreateInvoice";
+import CreateInvoiceTabs from "@/components/cashier/CreateInvoiceTabs";
 import AllInvoices from "@/components/cashier/AllInvoices";
 
 const CashierPanel = () => {
@@ -74,7 +74,7 @@ const CashierPanel = () => {
             </TabsContent>
 
           <TabsContent value="create-invoice">
-            <CreateInvoice />
+            <CreateInvoiceTabs />
           </TabsContent>
 
           <TabsContent value="all-invoices">
