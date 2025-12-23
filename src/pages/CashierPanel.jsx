@@ -17,6 +17,9 @@ const CashierPanel = () => {
   const [invoiceTabs, setInvoiceTabs] = useState([{ id: 1, name: 'Tab 1' }]);
   const [activeInvoiceTab, setActiveInvoiceTab] = useState(1);
   const [nextInvoiceTabId, setNextInvoiceTabId] = useState(2);
+  
+  // Store each tab's data to persist when switching tabs
+  const [tabsData, setTabsData] = useState({});
 
   useEffect(() => {
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
@@ -40,6 +43,13 @@ const CashierPanel = () => {
   }, [nextInvoiceTabId]);
 
   const closeInvoiceTab = useCallback((tabId) => {
+    // Remove data for the closed tab
+    setTabsData(prev => {
+      const newData = { ...prev };
+      delete newData[tabId];
+      return newData;
+    });
+    
     setInvoiceTabs(prev => {
       if (prev.length === 1) {
         // If it's the last tab, reset it
@@ -64,6 +74,13 @@ const CashierPanel = () => {
       return newTabs;
     });
   }, [activeInvoiceTab, nextInvoiceTabId]);
+  
+  const updateTabData = useCallback((tabId, data) => {
+    setTabsData(prev => ({
+      ...prev,
+      [tabId]: data
+    }));
+  }, []);
 
   if (!currentUser) return null;
 
@@ -118,6 +135,8 @@ const CashierPanel = () => {
               setActiveTab={setActiveInvoiceTab}
               addNewTab={addNewInvoiceTab}
               closeTab={closeInvoiceTab}
+              tabsData={tabsData}
+              updateTabData={updateTabData}
             />
           </TabsContent>
 

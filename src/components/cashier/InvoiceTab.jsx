@@ -27,21 +27,21 @@ import {
   addFlatToStorage
 } from "@/utils/buildingFlatStorage";
 
-const InvoiceTab = ({ tabId, onSave }) => {
+const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [buildings, setBuildings] = useState([]);
   const [flats, setFlats] = useState([]);
   const [productSearch, setProductSearch] = useState('');
-  const [selectedProducts, setSelectedProducts] = useState([]);
-  const [selectedBuilding, setSelectedBuilding] = useState('');
-  const [selectedFlat, setSelectedFlat] = useState('');
+  const [selectedProducts, setSelectedProducts] = useState(tabData?.selectedProducts || []);
+  const [selectedBuilding, setSelectedBuilding] = useState(tabData?.selectedBuilding || '');
+  const [selectedFlat, setSelectedFlat] = useState(tabData?.selectedFlat || '');
   const [flatSearch, setFlatSearch] = useState('');
-  const [taxRate, setTaxRate] = useState(0);
-  const [invoiceStatus, setInvoiceStatus] = useState('paid');
+  const [taxRate, setTaxRate] = useState(tabData?.taxRate || 0);
+  const [invoiceStatus, setInvoiceStatus] = useState(tabData?.invoiceStatus || 'paid');
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
   const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
-  const [amountReceived, setAmountReceived] = useState(0);
+  const [amountReceived, setAmountReceived] = useState(tabData?.amountReceived || 0);
   const [cashierName, setCashierName] = useState('');
   const [businessSettings, setBusinessSettings] = useState({
     name: '',
@@ -58,6 +58,20 @@ const InvoiceTab = ({ tabId, onSave }) => {
   const [newFlatNumber, setNewFlatNumber] = useState('');
 
   const isActive = useRef(true);
+
+  // Persist tab data when key state changes
+  useEffect(() => {
+    if (updateTabData) {
+      updateTabData({
+        selectedProducts,
+        selectedBuilding,
+        selectedFlat,
+        taxRate,
+        invoiceStatus,
+        amountReceived
+      });
+    }
+  }, [selectedProducts, selectedBuilding, selectedFlat, taxRate, invoiceStatus, amountReceived]);
 
   useEffect(() => {
     loadData();
