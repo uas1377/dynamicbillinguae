@@ -4,7 +4,7 @@ import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import InvoiceTab from "./InvoiceTab";
 
-const CreateInvoiceTabs = ({ tabs, activeTab, setActiveTab, addNewTab, closeTab }) => {
+const CreateInvoiceTabs = ({ tabs, activeTab, setActiveTab, addNewTab, closeTab, tabsData, updateTabData }) => {
 
   const handleCloseTab = (tabId, e) => {
     e.stopPropagation();
@@ -69,7 +69,9 @@ const CreateInvoiceTabs = ({ tabs, activeTab, setActiveTab, addNewTab, closeTab 
           >
             <InvoiceTab 
               tabId={tab.id} 
-              onSave={() => handleInvoiceSaved(tab.id)} 
+              onSave={() => handleInvoiceSaved(tab.id)}
+              tabData={tabsData[tab.id]}
+              updateTabData={(data) => updateTabData(tab.id, data)}
             />
           </div>
         ))}

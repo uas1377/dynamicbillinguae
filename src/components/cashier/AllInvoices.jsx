@@ -13,13 +13,21 @@ import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator
 import { 
   getStoredInvoices, 
   setStoredInvoices,
-  getStoredCustomers 
+  getStoredCustomers,
+  getBusinessSettings
 } from "@/utils/localStorageData";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
+  const [businessSettings, setBusinessSettings] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    logo: ''
+  });
   const [filters, setFilters] = useState({
     status: 'all',
     customer: 'all',
@@ -30,6 +38,7 @@ const AllInvoices = () => {
   useEffect(() => {
     loadInvoices();
     loadCustomers();
+    loadBusinessSettings();
   }, []);
 
   useEffect(() => {
@@ -44,6 +53,11 @@ const AllInvoices = () => {
   const loadCustomers = () => {
     const storedCustomers = getStoredCustomers();
     setCustomers(storedCustomers);
+  };
+  
+  const loadBusinessSettings = () => {
+    const settings = getBusinessSettings();
+    setBusinessSettings(settings);
   };
 
   const applyFilters = () => {
@@ -166,20 +180,25 @@ const AllInvoices = () => {
   };
 
   const printInvoice = async (invoice) => {
+    // Find customer to get proper customer ID
+    const customer = customers.find(c => c.id === invoice.customer_id);
+    
     const invoiceData = {
       invoiceNumber: invoice.invoice_number,
       customerName: invoice.customer_name || '',
-      customerPhone: invoice.customer_phone || '',
+      customerId: customer?.phone || invoice.customer_phone || '',
+      customerPhone: customer?.phone || invoice.customer_phone || '',
       items: invoice.items,
-      subTotal: invoice.sub_total,
-      discountAmount: invoice.discount_amount || 0,
+      subTotal: parseFloat(invoice.sub_total).toFixed(2),
+      discountAmount: parseFloat(invoice.discount_amount || 0).toFixed(2),
       taxRate: invoice.tax_rate || 0,
-      taxAmount: invoice.tax_amount || 0,
-      grandTotal: invoice.grand_total,
-      amountReceived: invoice.amount_received || invoice.grand_total,
-      changeAmount: invoice.change_amount || 0,
+      taxAmount: parseFloat(invoice.tax_amount || 0).toFixed(2),
+      grandTotal: parseFloat(invoice.grand_total).toFixed(2),
+      amountReceived: invoice.status === 'paid' ? parseFloat(invoice.amount_received || invoice.grand_total).toFixed(2) : '0.00',
+      changeAmount: parseFloat(invoice.change_amount || 0).toFixed(2),
       cashierName: invoice.cashier_name || '',
-      status: invoice.status
+      status: invoice.status,
+      yourCompany: businessSettings
     };
     
     try {
@@ -191,20 +210,25 @@ const AllInvoices = () => {
   };
 
   const saveInvoiceAsImage = async (invoice) => {
+    // Find customer to get proper customer ID
+    const customer = customers.find(c => c.id === invoice.customer_id);
+    
     const invoiceData = {
       invoiceNumber: invoice.invoice_number,
       customerName: invoice.customer_name || '',
-      customerPhone: invoice.customer_phone || '',
+      customerId: customer?.phone || invoice.customer_phone || '',
+      customerPhone: customer?.phone || invoice.customer_phone || '',
       items: invoice.items,
-      subTotal: invoice.sub_total,
-      discountAmount: invoice.discount_amount || 0,
+      subTotal: parseFloat(invoice.sub_total).toFixed(2),
+      discountAmount: parseFloat(invoice.discount_amount || 0).toFixed(2),
       taxRate: invoice.tax_rate || 0,
-      taxAmount: invoice.tax_amount || 0,
-      grandTotal: invoice.grand_total,
-      amountReceived: invoice.amount_received || invoice.grand_total,
-      changeAmount: invoice.change_amount || 0,
+      taxAmount: parseFloat(invoice.tax_amount || 0).toFixed(2),
+      grandTotal: parseFloat(invoice.grand_total).toFixed(2),
+      amountReceived: invoice.status === 'paid' ? parseFloat(invoice.amount_received || invoice.grand_total).toFixed(2) : '0.00',
+      changeAmount: parseFloat(invoice.change_amount || 0).toFixed(2),
       cashierName: invoice.cashier_name || '',
-      status: invoice.status
+      status: invoice.status,
+      yourCompany: businessSettings
     };
     
     try {
