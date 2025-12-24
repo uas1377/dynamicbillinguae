@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, DollarSign, Percent, Calendar, Infinity, Chev
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
-import { getStoredInvoices } from "@/utils/localStorageData";
+import { getStoredInvoices, getBusinessSettings } from "@/utils/localStorageData";
 
 const ADJUSTMENTS_KEY = "profitAdjustments";
 
@@ -30,9 +30,12 @@ const ProfitDashboard = () => {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [adjustments, setAdjustments] = useState(getStoredAdjustments());
   const [loading, setLoading] = useState(true);
+  const [currencyCode, setCurrencyCode] = useState('AED');
 
   useEffect(() => {
     loadAllData();
+    const settings = getBusinessSettings();
+    setCurrencyCode(settings.currencyCode || 'AED');
   }, []);
 
   const loadAllData = () => {
@@ -154,7 +157,7 @@ const ProfitDashboard = () => {
             )}
           </div>
           <div className={`text-2xl font-bold ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
-            {isProfit ? '+' : ''}{formatCurrency(data.profit)}
+            {isProfit ? '+' : ''}{formatCurrency(data.profit, currencyCode)}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             {isProfit ? 'Profit' : 'Loss'}
@@ -184,7 +187,7 @@ const ProfitDashboard = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(data.revenue)}
+                    {formatCurrency(data.revenue, currencyCode)}
                   </p>
                 </div>
                 <DollarSign className="w-8 h-8 text-primary opacity-50" />
@@ -198,7 +201,7 @@ const ProfitDashboard = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Cost</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(data.cost)}
+                    {formatCurrency(data.cost, currencyCode)}
                   </p>
                 </div>
                 <DollarSign className="w-8 h-8 text-orange-600 opacity-50" />
@@ -212,7 +215,7 @@ const ProfitDashboard = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Total {isProfit ? 'Profit' : 'Loss'}</p>
                   <p className={`text-2xl font-bold ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(Math.abs(data.profit))}
+                    {formatCurrency(Math.abs(data.profit), currencyCode)}
                   </p>
                 </div>
                 {isProfit ? (

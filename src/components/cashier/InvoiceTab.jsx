@@ -439,7 +439,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                     <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground">AED {product.price}</p>
+                  <p className="text-xs text-muted-foreground">{businessSettings.currencyCode || 'AED'} {product.price}</p>
                 </CardContent>
               </Card>
             ))}
@@ -464,7 +464,8 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 {selectedProducts.length} Item{selectedProducts.length > 1 ? 's' : ''}
               </Badge>
               <span className="text-sm font-semibold">
-                {formatCurrency(calculateSubtotal())}
+                {formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'AED')}
+              </span>
               </span>
             </div>
             <Button 
@@ -503,7 +504,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                       <Plus className="w-3 h-3" />
                     </Button>
                     <span className="ml-2 font-semibold text-sm w-16 text-right">
-                      {formatCurrency(product.quantity * product.amount)}
+                      {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'AED')}
                     </span>
                   </div>
                 </div>
@@ -566,10 +567,10 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-xs">
-                        {formatCurrency(product.amount)}
+                        {formatCurrency(product.amount, businessSettings.currencyCode || 'AED')}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-xs">
-                        {formatCurrency(product.quantity * product.amount)}
+                        {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'AED')}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -582,17 +583,17 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <div className="w-full sm:w-64 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span className="font-semibold">{formatCurrency(calculateSubtotal())}</span>
+                  <span className="font-semibold">{formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'AED')}</span>
                 </div>
                 {taxRate > 0 && (
                   <div className="flex justify-between">
                     <span>Tax ({taxRate}%):</span>
-                    <span className="font-semibold">{formatCurrency(calculateTax())}</span>
+                    <span className="font-semibold">{formatCurrency(calculateTax(), businessSettings.currencyCode || 'AED')}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-base font-bold border-t pt-2">
                   <span>Total:</span>
-                  <span className="text-primary">{formatCurrency(calculateTotal())}</span>
+                  <span className="text-primary">{formatCurrency(calculateTotal(), businessSettings.currencyCode || 'AED')}</span>
                 </div>
               </div>
             </div>
@@ -712,7 +713,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <div className="space-y-1">
                 <Label className="text-sm font-semibold">Change to Give</Label>
                 <div className="p-2 bg-background rounded-md border-2 border-primary h-10 flex items-center">
-                  <span className="text-lg font-bold text-primary">{formatCurrency(calculateChange())}</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(calculateChange(), businessSettings.currencyCode || 'AED')}</span>
                 </div>
               </div>
             </div>

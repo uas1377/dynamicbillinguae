@@ -5,6 +5,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
     try {
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const currencyCode = businessSettings.currencyCode || 'AED';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
@@ -120,35 +121,35 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <div class="dashed-line">
             <div class="flex">
               <span>Subtotal:</span>
-              <span>AED ${invoiceData.subTotal}</span>
+              <span>${currencyCode} ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div class="flex">
                 <span>Discount:</span>
-                <span>-AED ${invoiceData.discountAmount}</span>
+                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div class="flex">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>AED ${invoiceData.taxAmount}</span>
+                <span>${currencyCode} ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>AED ${invoiceData.grandTotal}</span>
+              <span>${currencyCode} ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
           <div class="change-box">
             <div class="flex">
               <span>Amount Paid:</span>
-              <span class="bold">AED ${amountPaidDisplay}</span>
+              <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
             </div>
             ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div class="flex bold large">
                 <span>Change:</span>
-                <span>AED ${invoiceData.changeAmount}</span>
+                <span>${currencyCode} ${invoiceData.changeAmount}</span>
               </div>
             ` : ''}
           </div>
@@ -188,6 +189,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const currencyCode = businessSettings.currencyCode || 'AED';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
@@ -253,35 +255,35 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           <div style="border-top: 1px dashed #000; padding-top: 4px; margin-top: 8px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Subtotal:</span>
-              <span>AED ${invoiceData.subTotal}</span>
+              <span>${currencyCode} ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Discount:</span>
-                <span>-AED ${invoiceData.discountAmount}</span>
+                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>AED ${invoiceData.taxAmount}</span>
+                <span>${currencyCode} ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>AED ${invoiceData.grandTotal}</span>
+              <span>${currencyCode} ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
           <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Amount Paid:</span>
-              <span style="font-weight: bold;">AED ${amountPaidDisplay}</span>
+              <span style="font-weight: bold;">${currencyCode} ${amountPaidDisplay}</span>
             </div>
             ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
                 <span>Change:</span>
-                <span>AED ${invoiceData.changeAmount}</span>
+                <span>${currencyCode} ${invoiceData.changeAmount}</span>
               </div>
             ` : ''}
           </div>
