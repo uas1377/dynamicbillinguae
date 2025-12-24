@@ -10,7 +10,8 @@ import {
   getStoredProducts, 
   addProductToStorage, 
   updateProductInStorage, 
-  deleteProductFromStorage 
+  deleteProductFromStorage,
+  getBusinessSettings
 } from "@/utils/localStorageData";
 
 const AddProduct = () => {
@@ -25,9 +26,12 @@ const AddProduct = () => {
   });
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [currencyCode, setCurrencyCode] = useState('AED');
 
   useEffect(() => {
     loadProducts();
+    const settings = getBusinessSettings();
+    setCurrencyCode(settings.currencyCode || 'AED');
   }, []);
 
   const loadProducts = () => {
@@ -249,8 +253,8 @@ const AddProduct = () => {
                           {prod.barcode && <p><span className="font-medium">Barcode:</span> {prod.barcode}</p>}
                           {prod.sku && <p><span className="font-medium">SKU:</span> {prod.sku}</p>}
                           <p><span className="font-medium">Quantity:</span> {prod.quantity}</p>
-                          <p><span className="font-medium">Price:</span> {formatCurrency(prod.price)}</p>
-                          {prod.tax_amount > 0 && <p><span className="font-medium">Tax (incl.):</span> {formatCurrency(prod.tax_amount)}</p>}
+                          <p><span className="font-medium">Price:</span> {formatCurrency(prod.price, currencyCode)}</p>
+                          {prod.tax_amount > 0 && <p><span className="font-medium">Tax (incl.):</span> {formatCurrency(prod.tax_amount, currencyCode)}</p>}
                         </div>
                       </div>
                       

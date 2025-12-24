@@ -26,7 +26,8 @@ const AllInvoices = () => {
     address: '',
     phone: '',
     email: '',
-    logo: ''
+    logo: '',
+    currencyCode: 'AED'
   });
   const [filters, setFilters] = useState({
     status: 'all',
@@ -344,7 +345,7 @@ const AllInvoices = () => {
               All Invoices ({filteredInvoices.length})
             </div>
             <div className="text-sm text-muted-foreground">
-              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total), 0))}
+              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total), 0), businessSettings.currencyCode || 'AED')}
             </div>
           </CardTitle>
         </CardHeader>
@@ -361,7 +362,7 @@ const AllInvoices = () => {
             <div className="space-y-4">
               {filteredInvoices.map((invoice) => {
                 const { date, time } = formatDateTime(invoice.created_at || invoice.date);
-                const amountPaid = invoice.status === 'unpaid' ? '0.00 (unpaid)' : formatCurrency(invoice.amount_received || invoice.grand_total);
+                const amountPaid = invoice.status === 'unpaid' ? '0.00 (unpaid)' : formatCurrency(invoice.amount_received || invoice.grand_total, businessSettings.currencyCode || 'AED');
                 
                 return (
                   <Card key={invoice.id} className="border shadow-sm">
@@ -406,7 +407,7 @@ const AllInvoices = () => {
                             />
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total)}</p>
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total, businessSettings.currencyCode || 'AED')}</p>
                           </div>
                         </div>
                       </div>
@@ -431,19 +432,19 @@ const AllInvoices = () => {
                         
                         <div className="space-y-1">
                           <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
+                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total, businessSettings.currencyCode || 'AED')}</p>
                           {parseFloat(invoice.discount_amount || 0) > 0 && (
-                            <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
+                            <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount, businessSettings.currencyCode || 'AED')}</p>
                           )}
                           {parseFloat(invoice.tax_amount) > 0 && (
-                            <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount)}</p>
+                            <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount, businessSettings.currencyCode || 'AED')}</p>
                           )}
                         </div>
                         
                         <div className="space-y-1">
                           <p><span className="font-medium">Amount Paid:</span> {amountPaid}</p>
                           {invoice.status === 'paid' && parseFloat(invoice.change_amount || 0) > 0 && (
-                            <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount)}</p>
+                            <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount, businessSettings.currencyCode || 'AED')}</p>
                           )}
                         </div>
                       </div>

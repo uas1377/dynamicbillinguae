@@ -11,11 +11,14 @@ import { supabase } from "@/integrations/supabase/client";
 import GoogleSheetsSync from "./GoogleSheetsSync";
 import BarcodeScanner from "@/components/ui/BarcodeScanner";
 
+import { getBusinessSettings } from "@/utils/localStorageData";
+
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState('AED');
   const [formData, setFormData] = useState({
     name: '',
     barcode: '',
@@ -28,6 +31,8 @@ const ProductManagement = () => {
 
   useEffect(() => {
     loadProducts();
+    const settings = getBusinessSettings();
+    setCurrencyCode(settings.currencyCode || 'AED');
   }, []);
 
   const loadProducts = async () => {
@@ -194,7 +199,7 @@ const ProductManagement = () => {
                           {product.barcode && <p>Barcode: {product.barcode}</p>}
                           {product.sku && <p>SKU: {product.sku}</p>}
                           <p>Quantity: {product.quantity}</p>
-                          <p>Price: {formatCurrency(product.price || 0)}</p>
+                          <p>Price: {formatCurrency(product.price || 0, currencyCode)}</p>
                           {product.discount_limit > 0 && <p>Max Discount: {product.discount_limit}%</p>}
                         </div>
                       </div>

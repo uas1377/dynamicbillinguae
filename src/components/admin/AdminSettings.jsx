@@ -39,7 +39,8 @@ const AdminSettings = () => {
     phone: '',
     email: '',
     logo: '',
-    defaultPanel: 'role-selection'
+    defaultPanel: 'role-selection',
+    currencyCode: 'AED'
   });
 
   const [logoFile, setLogoFile] = useState(null);
@@ -67,7 +68,8 @@ const AdminSettings = () => {
       phone: storedBusinessSettings.phone || '',
       email: storedBusinessSettings.email || '',
       logo: storedBusinessSettings.logo || '',
-      defaultPanel: storedBusinessSettings.defaultPanel || 'role-selection'
+      defaultPanel: storedBusinessSettings.defaultPanel || 'role-selection',
+      currencyCode: storedBusinessSettings.currencyCode || 'AED'
     });
   };
 
@@ -134,7 +136,8 @@ const AdminSettings = () => {
       phone: businessSettings.phone,
       email: businessSettings.email,
       logo: businessSettings.logo,
-      defaultPanel: businessSettings.defaultPanel
+      defaultPanel: businessSettings.defaultPanel,
+      currencyCode: businessSettings.currencyCode
     };
 
     saveBusinessSettings(businessData);
@@ -246,8 +249,19 @@ const AdminSettings = () => {
                   </span>
                 )}
               </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="currencyCode">Currency Code</Label>
+              <Input
+                id="currencyCode"
+                placeholder="Enter currency code (e.g., AED, USD, EUR)"
+                value={businessSettings.currencyCode}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, currencyCode: e.target.value.toUpperCase() })}
+                maxLength={3}
+              />
               <p className="text-xs text-muted-foreground">
-                Upload your business logo (recommended size: 200x200px)
+                This currency code will be used throughout the app
               </p>
             </div>
             
