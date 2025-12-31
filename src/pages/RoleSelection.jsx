@@ -1,67 +1,81 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, ShoppingCart, Shield, KeyRound, QrCode } from "lucide-react";
+import { User, ShoppingCart, Shield, KeyRound, QrCode, Keyboard } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { getFlatByUserId, getStoredBuildings } from "@/utils/buildingFlatStorage";
 import { getBusinessSettings } from "@/utils/localStorageData";
-import BarcodeScanner from "@/components/ui/BarcodeScanner";
 
 const RoleSelection = () => {
   const [loginModal, setLoginModal] = useState(null);
+  const [isScannerMode, setIsScannerMode] = useState(false);
   const [credentials, setCredentials] = useState({ username: '', password: '', userId: '' });
   const [defaultPanel, setDefaultPanel] = useState(null);
-  const [showQRScanner, setShowQRScanner] = useState(false);
   const navigate = useNavigate();
+
+  // Hidden scanner input ref (no camera)
+  const scannerInputRef = useRef(null);
 
   // Initialize default credentials on first load
   useEffect(() => {
-    // Set default admin credentials if not exists
     if (!localStorage.getItem('adminCredentials')) {
       localStorage.setItem('adminCredentials', JSON.stringify({ username: 'aaa', password: 'aaa' }));
     }
-    // Set default cashier if not exists
     if (!localStorage.getItem('cashiers')) {
       localStorage.setItem('cashiers', JSON.stringify([{ id: 'default', username: 'aaa', password: 'aaa' }]));
     }
   }, []);
 
-  // Check default panel setting on mount - using localStorage only
+  // Check default panel setting
   useEffect(() => {
-    const checkDefaultPanel = () => {
-      const businessSettings = getBusinessSettings();
-      if (businessSettings?.defaultPanel) {
-        setDefaultPanel(businessSettings.defaultPanel);
-      }
-    };
-    checkDefaultPanel();
+    const businessSettings = getBusinessSettings();
+    if (businessSettings?.defaultPanel) {
+      setDefaultPanel(businessSettings.defaultPanel);
+    }
   }, []);
 
-  const handleQRScan = (scannedCode) => {
-    if (scannedCode && scannedCode.length >= 6) {
-      const username = scannedCode.substring(0, 6);
-      const password = scannedCode.substring(6);
-      
-      // Validate cashier credentials
-      const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
-      const validCashier = cashiers.find(c => c.username === username && c.password === password);
-      
-      if (validCashier) {
-        sessionStorage.setItem('currentUser', JSON.stringify({ role: 'cashier', username: username }));
-        toast.success('Login successful via QR code');
-        navigate('/cashier');
-        setLoginModal(null);
-      } else {
-        toast.error('Invalid QR code credentials');
-      }
-    } else {
-      toast.error('Invalid QR code format. Must be at least 6 characters.');
+  // Auto-focus scanner input when QR mode is active
+  useEffect(() => {
+    if (isScannerMode && loginModal === 'cashier' && scannerInputRef.current) {
+      scannerInputRef.current.focus();
     }
-    setShowQRScanner(false);
+  }, [isScannerMode, loginModal]);
+
+  // Handle virtual QR scanner input (hidden input)
+  const handleScannerInput = (e) => {
+    if (e.key === 'Enter') {
+      const code = e.target.value.trim();
+      if (code.includes('<id>') && code.includes('<pass>')) {
+        const username = code.split('<id>')[1].split('<pass>')[0].trim();
+        const password = code.split('<pass>')[1].trim();
+
+        // Validate cashier credentials
+        const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
+        const validCashier = cashiers.find(c => c.username === username && c.password === password);
+
+        if (validCashier || (username === 'aaa' && password === 'aaa')) {
+          sessionStorage.setItem('currentUser', JSON.stringify({
+            role: 'cashier',
+            username: validCashier?.username || 'aaa',
+            id: validCashier?.id || 'default-cashier'
+          }));
+          toast.success('Login successful via QR code');
+          navigate('/cashier');
+          setLoginModal(null);
+        } else {
+          toast.error('Invalid QR credentials');
+        }
+      } else {
+        toast.error('Invalid QR format. Use <id>username<pass>password');
+      }
+
+      e.target.value = ''; // Clear for next scan
+      e.target.focus(); // Refocus for continuous scanning
+    }
   };
 
   const handleLogin = (role) => {
@@ -70,55 +84,54 @@ const RoleSelection = () => {
         toast.error('Please enter your User ID');
         return;
       }
-      
-      // Find flat by user ID
+
       const flat = getFlatByUserId(credentials.userId.trim().toUpperCase());
       if (!flat) {
-        toast.error('Invalid User ID. Please check and try again.');
+        toast.error('Invalid User ID');
         return;
       }
-      
+
       const buildings = getStoredBuildings();
       const building = buildings.find(b => b.id === flat.building_id);
-      
-      sessionStorage.setItem('currentUser', JSON.stringify({ 
-        role: 'customer', 
+
+      sessionStorage.setItem('currentUser', JSON.stringify({
+        role: 'customer',
         userId: flat.user_id,
         flatId: flat.id,
         flatNumber: flat.flat_number,
         buildingName: building?.name || '',
-        phone: flat.phone 
+        phone: flat.phone
       }));
       navigate('/customer');
     } else {
-      // Check credentials based on role
+      const { username, password } = credentials;
+
       if (role === 'admin') {
-        // Use localStorage for admin credentials (default: aaa/aaa)
         const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
-        if (credentials.username !== adminCreds.username || credentials.password !== adminCreds.password) {
+        if (username !== adminCreds.username || password !== adminCreds.password) {
           toast.error('Invalid admin credentials');
           return;
         }
       } else if (role === 'cashier') {
-        // Use localStorage for cashier credentials (default: aaa/aaa)
         const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
-        const validCashier = cashiers.find(c => c.username === credentials.username && c.password === credentials.password);
-        
+        const validCashier = cashiers.find(c => c.username === username && c.password === password);
+
         if (!validCashier) {
           toast.error('Invalid cashier credentials');
           return;
         }
       }
-      
-      sessionStorage.setItem('currentUser', JSON.stringify({ role, username: credentials.username }));
+
+      sessionStorage.setItem('currentUser', JSON.stringify({ role, username }));
       navigate(`/${role}`);
     }
+
     setLoginModal(null);
     setCredentials({ username: '', password: '', userId: '' });
   };
 
   const openModal = (role) => {
-    // If cashier is default panel, skip login but use default cashier name
+    // Auto-login for default cashier panel
     if (role === 'cashier' && defaultPanel === 'cashier') {
       const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
       const defaultCashierName = cashiers[0]?.username || 'Cashier';
@@ -126,8 +139,10 @@ const RoleSelection = () => {
       navigate('/cashier');
       return;
     }
+
     setLoginModal(role);
     setCredentials({ username: '', password: '', userId: '' });
+    setIsScannerMode(false); // Reset scanner mode on modal open
   };
 
   return (
@@ -192,14 +207,27 @@ const RoleSelection = () => {
         </div>
       </div>
 
+      {/* Login Dialog */}
       <Dialog open={!!loginModal} onOpenChange={() => setLoginModal(null)}>
         <DialogContent className="gradient-card border-0">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl">
-              {loginModal === 'customer' ? 'Customer Login' : `${loginModal} Login`}
+              {loginModal ? `${loginModal.charAt(0).toUpperCase() + loginModal.slice(1)} Login` : 'Login'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+
+          <div className="space-y-6">
+            {loginModal === 'cashier' && (
+              <Button
+                variant="outline"
+                className={`w-full h-12 border-2 gap-2 ${isScannerMode ? 'bg-primary/10 border-primary' : ''}`}
+                onClick={() => setIsScannerMode(!isScannerMode)}
+              >
+                {isScannerMode ? <Keyboard className="w-5 h-5" /> : <QrCode className="w-5 h-5" />}
+                {isScannerMode ? "Switch to Manual Login" : "Switch to QR Scan"}
+              </Button>
+            )}
+
             {loginModal === 'customer' ? (
               <div className="space-y-2">
                 <Label htmlFor="userId">User ID</Label>
@@ -214,59 +242,61 @@ const RoleSelection = () => {
                     maxLength={6}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Your User ID is printed on your receipt
-                </p>
+                <p className="text-xs text-muted-foreground">Your User ID is printed on your receipt</p>
               </div>
             ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    placeholder="Enter username"
-                    value={credentials.username}
-                    onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter password"
-                    value={credentials.password}
-                    onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                  />
-                </div>
-                
-                {loginModal === 'cashier' && (
-                  <Button 
-                    onClick={() => setShowQRScanner(true)} 
-                    variant="outline"
-                    className="w-full flex items-center gap-2"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    Scan QR Code to Login
-                  </Button>
-                )}
-              </>
+              loginModal && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      placeholder="Enter username"
+                      value={credentials.username}
+                      onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter password"
+                      value={credentials.password}
+                      onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                    />
+                  </div>
+                </>
+              )
             )}
-            <Button 
-              onClick={() => handleLogin(loginModal)} 
-              className="w-full gradient-primary text-white border-0"
-            >
-              Login
-            </Button>
+
+            {loginModal && (
+              <Button
+                onClick={() => handleLogin(loginModal)}
+                className="w-full gradient-primary text-white border-0 h-12"
+              >
+                Login
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
 
-      <BarcodeScanner 
-        open={showQRScanner} 
-        onClose={() => setShowQRScanner(false)} 
-        onScan={handleQRScan} 
-      />
+      {/* Hidden QR Scanner Input - activates on button click */}
+      {isScannerMode && loginModal === 'cashier' && (
+        <input
+          ref={scannerInputRef}
+          type="text"
+          className="absolute opacity-0 w-1 h-1 pointer-events-none"
+          onKeyDown={handleScannerInput}
+          autoFocus
+          onBlur={() => {
+            if (isScannerMode) {
+              setTimeout(() => scannerInputRef.current?.focus(), 100);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
