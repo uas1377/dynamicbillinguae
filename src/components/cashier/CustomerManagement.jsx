@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { 
@@ -50,11 +51,18 @@ const CustomerManagement = () => {
   const [editingFlat, setEditingFlat] = useState(null);
   const [flatNumber, setFlatNumber] = useState('');
   const [activeBuildingId, setActiveBuildingId] = useState(null);
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', description: '', onConfirm: null });
 
   // Get current cashier info
   const getCurrentCashier = () => {
-    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-    return user.cashierId || user.userId || 'Admin';
+    try {
+      const user = JSON.parse(sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || '{}');
+      return user?.username || user?.name || "Unknown Cashier";
+    } catch {
+      return "Unknown Cashier";
+    }
   };
 
   useEffect(() => { 
@@ -67,10 +75,20 @@ const CustomerManagement = () => {
     setAllFlats(getStoredFlats());
   };
 
-  // Toggle single invoice payment status
-  const toggleInvoiceStatus = (invoice, e) => {
+  // Toggle single invoice payment status with confirmation
+  const requestToggleInvoiceStatus = (invoice, e) => {
     if (e) e.stopPropagation();
     const newStatus = invoice.status === 'paid' ? 'unpaid' : 'paid';
+    
+    setConfirmDialog({
+      open: true,
+      title: `Mark Invoice as ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}?`,
+      description: `Are you sure you want to mark invoice #${invoice.invoice_number} as ${newStatus}?`,
+      onConfirm: () => executeToggleInvoiceStatus(invoice, newStatus)
+    });
+  };
+  
+  const executeToggleInvoiceStatus = (invoice, newStatus) => {
     const cashierName = getCurrentCashier();
     
     const updates = {
@@ -107,10 +125,20 @@ const CustomerManagement = () => {
     }
     
     toast.success(`Invoice marked as ${newStatus}`);
+    setConfirmDialog({ open: false, title: '', description: '', onConfirm: null });
   };
 
-  // Toggle all invoices in a month
-  const toggleMonthStatus = (group, targetStatus) => {
+  // Toggle all invoices in a month with confirmation
+  const requestToggleMonthStatus = (group, targetStatus) => {
+    setConfirmDialog({
+      open: true,
+      title: `Mark All Invoices as ${targetStatus.charAt(0).toUpperCase() + targetStatus.slice(1)}?`,
+      description: `Are you sure you want to mark all ${group.invoices.length} invoices in ${group.label} as ${targetStatus}?`,
+      onConfirm: () => executeToggleMonthStatus(group, targetStatus)
+    });
+  };
+  
+  const executeToggleMonthStatus = (group, targetStatus) => {
     const cashierName = getCurrentCashier();
     
     group.invoices.forEach(inv => {
@@ -127,6 +155,141 @@ const CustomerManagement = () => {
     setFlatInvoices(updatedInvoices);
     
     toast.success(`All invoices in ${group.label} marked as ${targetStatus}`);
+    setConfirmDialog({ open: false, title: '', description: '', onConfirm: null });
+  };
+  
+  // Print monthly summary
+  const printMonthlySummary = (group) => {
+    const flatInfo = selectedFlat;
+    const buildingInfo = buildings.find(b => b.id === flatInfo?.building_id);
+    
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printDocument = printWindow.document;
+    
+    printDocument.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Monthly Invoice Summary</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.3;
+            width: 280px;
+            background: white;
+            color: black;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .large { font-size: 18px; }
+          .small { font-size: 12px; }
+          .dashed-line { 
+            border-bottom: 1px dashed #000; 
+            margin: 8px 0; 
+          }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { padding: 4px 2px; text-align: left; }
+          th { border-bottom: 1px solid #000; }
+          .text-right { text-align: right; }
+          .paid { color: green; }
+          .unpaid { color: red; }
+          @media print {
+            body { width: 280px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center dashed-line">
+          ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
+          <div class="large bold">${businessSettings.name || 'Monthly Summary'}</div>
+          ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
+          ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
+        </div>
+        
+        <div style="margin: 8px 0; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+          <div><strong>Month:</strong> ${group.label}</div>
+          <div><strong>Customer ID:</strong> ${flatInfo?.user_id || 'N/A'}</div>
+          <div><strong>Building:</strong> ${buildingInfo?.name || 'N/A'}</div>
+          <div><strong>Flat:</strong> ${flatInfo?.flat_number || 'N/A'}</div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Date</th>
+              <th class="text-right">Amount</th>
+              <th class="text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${group.invoices.map(inv => `
+              <tr>
+                <td>${inv.invoice_number}</td>
+                <td>${new Date(inv.created_at || inv.date).toLocaleDateString()}</td>
+                <td class="text-right">${formatCurrency(inv.grand_total)}</td>
+                <td class="text-right ${inv.status === 'paid' ? 'paid' : 'unpaid'}">${inv.status?.toUpperCase()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="dashed-line" style="margin-top: 12px; padding-top: 8px;">
+          <div style="display: flex; justify-content: space-between;"><span>Total Paid:</span><span class="paid bold">${formatCurrency(group.paid)}</span></div>
+          <div style="display: flex; justify-content: space-between;"><span>Total Unpaid:</span><span class="unpaid bold">${formatCurrency(group.unpaid)}</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 16px; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;"><span class="bold">Grand Total:</span><span class="bold">${formatCurrency(group.paid + group.unpaid)}</span></div>
+        </div>
+        
+        <div class="center small" style="margin-top: 12px;">
+          <div>Printed on: ${new Date().toLocaleString()}</div>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printDocument.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+  
+  // Handle save image for detail view
+  const handleSaveDetailImage = async () => {
+    if (!selectedInvoice) return;
+    
+    const flatInfo = allFlats.find(f => f.id === selectedInvoice.flat_id);
+    const buildingInfo = buildings.find(b => b.id === selectedInvoice.building_id);
+    
+    const invoiceData = {
+      invoiceNumber: selectedInvoice.invoice_number,
+      customerName: selectedInvoice.customer_name || flatInfo?.flat_number || '',
+      customerId: flatInfo?.user_id || '',
+      customerPhone: selectedInvoice.customer_phone || '',
+      items: selectedInvoice.items || [],
+      subTotal: parseFloat(selectedInvoice.sub_total || 0).toFixed(2),
+      discountAmount: parseFloat(selectedInvoice.discount_amount || 0).toFixed(2),
+      taxRate: selectedInvoice.tax_rate || 0,
+      taxAmount: parseFloat(selectedInvoice.tax_amount || 0).toFixed(2),
+      grandTotal: parseFloat(selectedInvoice.grand_total || 0).toFixed(2),
+      amountReceived: selectedInvoice.status === 'paid' ? parseFloat(selectedInvoice.amount_received || selectedInvoice.grand_total || 0).toFixed(2) : '0.00',
+      changeAmount: parseFloat(selectedInvoice.change_amount || 0).toFixed(2),
+      cashierName: selectedInvoice.cashier_name || '',
+      status: selectedInvoice.status,
+      yourCompany: businessSettings,
+      buildingName: buildingInfo?.name || '',
+      flatNumber: flatInfo?.flat_number || ''
+    };
+    
+    try {
+      await saveAsImage(invoiceData);
+      toast.success('Invoice saved as image');
+    } catch (error) {
+      toast.error('Failed to save invoice as image');
+    }
   };
 
   const handleEditBuilding = (b) => {
@@ -211,7 +374,7 @@ const CustomerManagement = () => {
               <span className="text-sm text-muted-foreground">Unpaid</span>
               <Switch 
                 checked={selectedInvoice.status === 'paid'}
-                onCheckedChange={() => toggleInvoiceStatus(selectedInvoice)}
+                onCheckedChange={() => requestToggleInvoiceStatus(selectedInvoice)}
               />
               <span className="text-sm text-muted-foreground">Paid</span>
             </div>
@@ -227,6 +390,7 @@ const CustomerManagement = () => {
         <Card id="receipt-content" className="max-w-[350px] mx-auto bg-white text-black font-mono shadow-md border-dashed">
           <CardContent className="p-4">
             <div className="text-center border-b border-black border-dashed pb-2 mb-2">
+               {businessSettings.logo && <img src={businessSettings.logo} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />}
                <h2 className="font-bold text-lg uppercase">{businessSettings.name || 'RECEIPT'}</h2>
                <p className="text-[10px]">{businessSettings.address}</p>
             </div>
@@ -269,7 +433,7 @@ const CustomerManagement = () => {
 
             <div className="mt-6 flex gap-2 no-print">
               <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
-              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => saveAsImage('receipt-content')}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
+              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
             </div>
           </CardContent>
         </Card>
@@ -300,9 +464,9 @@ const CustomerManagement = () => {
           </div>
         </div>
         {filteredInvoices.map(inv => (
-          <Card key={inv.invoice_number} className="hover:bg-muted/50 transition-colors">
+          <Card key={inv.invoice_number} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => { setSelectedInvoice(inv); setViewMode('detail'); }}>
             <CardContent className="p-4">
-              <div className="flex justify-between items-center cursor-pointer" onClick={() => { setSelectedInvoice(inv); setViewMode('detail'); }}>
+              <div className="flex justify-between items-center">
                 <div>
                   <p className="font-bold">{inv.invoice_number}</p>
                   <p className="text-xs opacity-60">{new Date(inv.created_at).toLocaleDateString()}</p>
@@ -312,15 +476,8 @@ const CustomerManagement = () => {
                   <Badge variant={inv.status === 'paid' ? 'success' : 'destructive'} className="text-[10px]">{inv.status?.toUpperCase()}</Badge>
                 </div>
               </div>
-              <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                <span className="text-sm text-muted-foreground">Mark as {inv.status === 'paid' ? 'Unpaid' : 'Paid'}</span>
-                <Switch 
-                  checked={inv.status === 'paid'}
-                  onCheckedChange={(e) => toggleInvoiceStatus(inv, e)}
-                />
-              </div>
               {inv.status === 'paid' && inv.paid_by_cashier && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
                   Received by: {inv.paid_by_cashier}
                 </p>
               )}
@@ -349,7 +506,6 @@ const CustomerManagement = () => {
         <div className="grid gap-3 sm:grid-cols-2">
           {monthlyGroups.map(group => {
             const allPaid = group.invoices.every(inv => inv.status === 'paid');
-            const hasUnpaid = group.invoices.some(inv => inv.status !== 'paid');
             
             return (
               <Card key={group.key} className="hover:border-primary border-2">
@@ -365,9 +521,17 @@ const CustomerManagement = () => {
                     <span className="text-xs text-muted-foreground">Mark all as {allPaid ? 'Unpaid' : 'Paid'}</span>
                     <Switch 
                       checked={allPaid}
-                      onCheckedChange={() => toggleMonthStatus(group, allPaid ? 'unpaid' : 'paid')}
+                      onCheckedChange={() => requestToggleMonthStatus(group, allPaid ? 'unpaid' : 'paid')}
                     />
                   </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="w-full mt-2" 
+                    onClick={(e) => { e.stopPropagation(); printMonthlySummary(group); }}
+                  >
+                    <Printer className="h-3 w-3 mr-2"/> Print Month Summary
+                  </Button>
                 </CardContent>
               </Card>
             );
@@ -457,6 +621,20 @@ const CustomerManagement = () => {
           <DialogFooter><Button onClick={saveFlat} className="w-full gradient-primary text-white border-0">Save Flat</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, title: '', description: '', onConfirm: null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDialog.onConfirm}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
