@@ -102,6 +102,15 @@ export const getFlatByUserId = (userId) => {
   return flats.find((flat) => flat.user_id === userId) || null;
 };
 
+export const updateBuildingInStorage = (buildingId, name) => {
+  const buildings = getStoredBuildings();
+  const updated = buildings.map((b) =>
+    b.id === buildingId ? { ...b, name } : b
+  );
+  setStoredBuildings(updated);
+  return updated;
+};
+
 export const deleteBuildingFromStorage = (buildingId) => {
   const buildings = getStoredBuildings();
   const updated = buildings.filter((b) => b.id !== buildingId);
