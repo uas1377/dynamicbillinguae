@@ -31,6 +31,8 @@ export const printHistoricalReceipt = (invoice) => {
       </head>
       <body>
         <div class="center">
+           ${settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
+
           <div class="bold" style="font-size: 16px;">${settings.name || 'BUSINESS NAME'}</div>
           <div>${settings.address || ''}</div>
           <div>Tel: ${settings.phone || ''}</div>
