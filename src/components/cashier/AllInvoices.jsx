@@ -6,7 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, Filter, Search, Printer, Download, Clock, User } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { FileText, Filter, Search, Printer, Download, Clock, User, UserCheck } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -35,6 +36,19 @@ const AllInvoices = () => {
     search: '',
     month: 'all'
   });
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, invoice: null, newStatus: '' });
+
+  // Get current cashier info
+  const getCurrentCashier = () => {
+    try {
+      const user = JSON.parse(sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser') || '{}');
+      return user?.username || user?.name || "Unknown Cashier";
+    } catch {
+      return "Unknown Cashier";
+    }
+  };
 
   useEffect(() => {
     loadInvoices();
@@ -168,16 +182,36 @@ const AllInvoices = () => {
     return months;
   };
 
-  const toggleInvoiceStatus = (invoiceId, currentStatus) => {
+  const requestToggleInvoiceStatus = (invoiceId, currentStatus) => {
     const newStatus = currentStatus === 'paid' ? 'unpaid' : 'paid';
+    const invoice = invoices.find(inv => inv.id === invoiceId);
     
-    const updatedInvoices = invoices.map(invoice =>
-      invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
+    setConfirmDialog({
+      open: true,
+      invoice,
+      newStatus
+    });
+  };
+  
+  const executeToggleInvoiceStatus = () => {
+    const { invoice, newStatus } = confirmDialog;
+    if (!invoice) return;
+    
+    const cashierName = getCurrentCashier();
+    
+    const updatedInvoices = invoices.map(inv =>
+      inv.id === invoice.id ? { 
+        ...inv, 
+        status: newStatus,
+        paid_by_cashier: newStatus === 'paid' ? cashierName : null,
+        paid_at: newStatus === 'paid' ? new Date().toISOString() : null
+      } : inv
     );
     
     setStoredInvoices(updatedInvoices);
     setInvoices(updatedInvoices);
     toast.success(`Invoice status updated to ${newStatus}`);
+    setConfirmDialog({ open: false, invoice: null, newStatus: '' });
   };
 
   const printInvoice = async (invoice) => {
@@ -403,7 +437,7 @@ const AllInvoices = () => {
                             <Switch
                               id={`status-${invoice.id}`}
                               checked={invoice.status === 'paid'}
-                              onCheckedChange={() => toggleInvoiceStatus(invoice.id, invoice.status)}
+                              onCheckedChange={() => requestToggleInvoiceStatus(invoice.id, invoice.status)}
                             />
                           </div>
                           <div className="text-right">
@@ -446,6 +480,12 @@ const AllInvoices = () => {
                           {invoice.status === 'paid' && parseFloat(invoice.change_amount || 0) > 0 && (
                             <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount, businessSettings.currencyCode || 'AED')}</p>
                           )}
+                          {invoice.status === 'paid' && invoice.paid_by_cashier && (
+                            <p className="flex items-center gap-1 text-green-600">
+                              <UserCheck className="w-3 h-3" />
+                              <span className="font-medium">Received by:</span> {invoice.paid_by_cashier}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -473,6 +513,22 @@ const AllInvoices = () => {
           )}
         </CardContent>
       </Card>
+      
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, invoice: null, newStatus: '' })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Payment Status?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to mark invoice #{confirmDialog.invoice?.invoice_number} as {confirmDialog.newStatus}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executeToggleInvoiceStatus}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
