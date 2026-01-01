@@ -5,20 +5,20 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Minus, ShoppingCart, FileText, Printer, Image, ArrowRight, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
-import { 
-  getStoredProducts, 
+import {
+  getStoredProducts,
   updateProductInStorage,
   getStoredCustomers,
   addInvoiceToStorage,
   generateInvoiceNumber,
-  getBusinessSettings 
+  getBusinessSettings
 } from "@/utils/localStorageData";
 import {
   getStoredBuildings,
@@ -50,28 +50,12 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
     email: '',
     logo: ''
   });
-  
-  // Add Building/Flat dialogs
+
   const [showAddBuildingDialog, setShowAddBuildingDialog] = useState(false);
   const [showAddFlatDialog, setShowAddFlatDialog] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
   const [newFlatNumber, setNewFlatNumber] = useState('');
-
   const isActive = useRef(true);
-
-  // Persist tab data when key state changes
-  useEffect(() => {
-    if (updateTabData) {
-      updateTabData({
-        selectedProducts,
-        selectedBuilding,
-        selectedFlat,
-        taxRate,
-        invoiceStatus,
-        amountReceived
-      });
-    }
-  }, [selectedProducts, selectedBuilding, selectedFlat, taxRate, invoiceStatus, amountReceived]);
 
   useEffect(() => {
     loadData();
@@ -88,15 +72,14 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
     }
   }, [selectedBuilding]);
 
-  // Barcode scanner listener - only active for this tab
   useEffect(() => {
     let timeout;
     const handleKeyPress = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (!isActive.current) return;
-      
+
       clearTimeout(timeout);
-      
+
       if (e.key === 'Enter' && barcodeBuffer.length > 0) {
         const product = products.find(p => p.barcode === barcodeBuffer.trim());
         if (product) {
@@ -111,7 +94,6 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
         timeout = setTimeout(() => setBarcodeBuffer(''), 100);
       }
     };
-
     window.addEventListener('keypress', handleKeyPress);
     return () => {
       window.removeEventListener('keypress', handleKeyPress);
@@ -125,7 +107,6 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       const storedCustomers = getStoredCustomers();
       const storedBuildings = getStoredBuildings();
       const storedSettings = getBusinessSettings();
-
       setProducts(storedProducts);
       setCustomers(storedCustomers);
       setBuildings(storedBuildings);
@@ -151,7 +132,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       toast.error('Building name is required');
       return;
     }
-    
+
     try {
       const newBuilding = addBuildingToStorage(newBuildingName.trim());
       setBuildings([...buildings, newBuilding]);
@@ -173,7 +154,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       toast.error('Select a building first');
       return;
     }
-    
+
     try {
       const newFlat = addFlatToStorage(selectedBuilding, newFlatNumber.trim());
       setFlats([...flats, newFlat]);
@@ -193,15 +174,15 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
 
   const addProductToInvoice = (product) => {
     const existingIndex = selectedProducts.findIndex(p => p.id === product.id);
-    
+
     if (existingIndex >= 0) {
       const updatedProducts = [...selectedProducts];
       updatedProducts[existingIndex].quantity += 1;
       setSelectedProducts(updatedProducts);
     } else {
-      setSelectedProducts([...selectedProducts, { 
-        ...product, 
-        quantity: 1, 
+      setSelectedProducts([...selectedProducts, {
+        ...product,
+        quantity: 1,
         amount: product.price || 0,
         buying_price: product.buying_price || 0
       }]);
@@ -216,22 +197,22 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       }
       return product;
     }).filter(product => product.quantity > 0);
-    
+
     setSelectedProducts(updatedProducts);
   };
 
   const updateProductQuantityDirect = (productId, value) => {
     if (value === '' || value === null || value === undefined) {
-      setSelectedProducts(selectedProducts.map(product => 
+      setSelectedProducts(selectedProducts.map(product =>
         product.id === productId ? { ...product, quantity: 0, quantityInput: '' } : product
       ));
       return;
     }
-    
+
     const newQuantity = parseFloat(value);
     if (isNaN(newQuantity)) return;
-    
-    setSelectedProducts(selectedProducts.map(product => 
+
+    setSelectedProducts(selectedProducts.map(product =>
       product.id === productId ? { ...product, quantity: Math.max(0, newQuantity), quantityInput: value } : product
     ));
   };
@@ -264,26 +245,22 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       toast.error('Please add at least one product to the invoice');
       return;
     }
-
     const productsWithoutAmount = selectedProducts.filter(p => p.amount <= 0);
     if (productsWithoutAmount.length > 0) {
       toast.error('Please set amount for all products');
       return;
     }
-
     try {
       const invoiceNumber = getNextInvoiceNumber();
       const customer = getCustomerFromSelection();
       const building = buildings.find(b => b.id === selectedBuilding);
       const flat = flats.find(f => f.id === selectedFlat);
-
       const newInvoice = {
         invoice_number: invoiceNumber,
         customer_id: customer?.id || null,
         customer_phone: flat?.user_id || customer?.phone || null,
         customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
-        building_id: selectedBuilding || null,
-        flat_id: selectedFlat || null,
+        flat_id: selectedFlat, // Ensures flat_id is saved
         items: selectedProducts,
         sub_total: calculateSubtotal(),
         tax_rate: taxRate,
@@ -295,10 +272,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
         cashier_name: cashierName,
         date: new Date().toISOString()
       };
-
       addInvoiceToStorage(newInvoice);
-
-      // Update product quantities in localStorage
       selectedProducts.forEach((soldProduct) => {
         const product = products.find(p => p.id === soldProduct.id);
         if (product) {
@@ -306,11 +280,10 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
           updateProductInStorage(product.id, { quantity: newQuantity });
         }
       });
-      
+
       toast.success(`Invoice ${invoiceNumber} saved successfully`);
       setShowCheckoutDialog(false);
-      
-      // Call onSave to close the tab
+
       if (onSave) {
         onSave();
       }
@@ -324,12 +297,12 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       toast.error('Please add products to print invoice');
       return;
     }
-    
+
     const invoiceNumber = getNextInvoiceNumber();
     const customer = getCustomerFromSelection();
     const building = buildings.find(b => b.id === selectedBuilding);
     const flat = flats.find(f => f.id === selectedFlat);
-    
+
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
@@ -347,7 +320,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       status: invoiceStatus,
       yourCompany: businessSettings
     };
-    
+
     try {
       await generateThermalPrint(invoiceData);
       toast.success('Invoice sent to printer');
@@ -361,12 +334,12 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       toast.error('Please add products to save invoice');
       return;
     }
-    
+
     const invoiceNumber = getNextInvoiceNumber();
     const customer = getCustomerFromSelection();
     const building = buildings.find(b => b.id === selectedBuilding);
     const flat = flats.find(f => f.id === selectedFlat);
-    
+
     const invoiceData = {
       invoiceNumber,
       customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
@@ -384,7 +357,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
       status: invoiceStatus,
       yourCompany: businessSettings || { name: '', address: '', phone: '', logo: '' }
     };
-    
+
     try {
       await saveAsImage(invoiceData);
       toast.success('Invoice saved as image');
@@ -402,7 +375,8 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
     setShowCheckoutDialog(true);
   };
 
-  const filteredFlats = flats.filter(flat => 
+  // FIXED: Move filteredFlats definition BEFORE the return statement
+  const filteredFlats = flats.filter(flat =>
     flat.flat_number.toLowerCase().includes(flatSearch.toLowerCase())
   );
 
@@ -426,27 +400,27 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[60vh] overflow-y-auto">
             {products
-              .filter(product => 
+              .filter(product =>
                 product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
                 (product.sku && product.sku.toLowerCase().includes(productSearch.toLowerCase()))
               )
               .map((product) => (
-              <Card 
-                key={product.id} 
-                className="cursor-pointer hover:shadow-md transition-shadow border"
-                onClick={() => addProductToInvoice(product)}
-              >
-                <CardContent className="p-3 text-center">
-                  <div className="w-10 h-10 mx-auto mb-2 rounded-lg gradient-primary flex items-center justify-center">
-                    <ShoppingCart className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground">{businessSettings.currencyCode || 'AED'} {product.price}</p>
-                </CardContent>
-              </Card>
-            ))}
+                <Card
+                  key={product.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow border"
+                  onClick={() => addProductToInvoice(product)}
+                >
+                  <CardContent className="p-3 text-center">
+                    <div className="w-10 h-10 mx-auto mb-2 rounded-lg gradient-primary flex items-center justify-center">
+                      <ShoppingCart className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
+                    <p className="text-xs text-muted-foreground">{businessSettings.currencyCode || 'AED'} {product.price}</p>
+                  </CardContent>
+                </Card>
+              ))}
           </div>
-          
+
           {products.length === 0 && (
             <div className="text-center py-8">
               <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
@@ -456,7 +430,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
           )}
         </CardContent>
       </Card>
-      
+
       {/* Fixed Bottom Navigation Bar */}
       {selectedProducts.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 p-3 sm:p-4">
@@ -469,7 +443,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 {formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'AED')}
               </span>
             </div>
-            <Button 
+            <Button
               onClick={handleOpenCheckout}
               className="gradient-primary flex items-center gap-2"
             >
@@ -523,10 +497,12 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <FileText className="w-5 h-5" />
               Invoice Details
             </DialogTitle>
+            <DialogDescription>
+              Review selected products, customer details, tax, payment status, and finalize the invoice.
+            </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
-            {/* Cashier Info */}
             <div className="text-sm text-muted-foreground">
               Cashier: <span className="font-semibold text-foreground">{cashierName}</span>
             </div>
@@ -555,6 +531,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                             <Minus className="w-3 h-3" />
                           </Button>
                           <Input
+                            id={`qty-${product.id}`}
                             type="number"
                             value={product.quantityInput !== undefined ? product.quantityInput : product.quantity}
                             onChange={(e) => updateProductQuantityDirect(product.id, e.target.value)}
@@ -579,7 +556,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               </Table>
             </div>
 
-            {/* Subtotal and Total */}
+            {/* Subtotal, Tax, Total */}
             <div className="flex justify-end">
               <div className="w-full sm:w-64 space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -604,16 +581,16 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <Label className="text-sm font-semibold">Customer (Optional)</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1 text-xs">
+                  <Label htmlFor="building-select" className="flex items-center gap-1 text-xs">
                     <Building2 className="w-3 h-3" />
                     Building
                   </Label>
                   <div className="flex gap-1">
                     <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-                      <SelectTrigger className="h-9 flex-1">
+                      <SelectTrigger id="building-select" className="h-9 flex-1">
                         <SelectValue placeholder="Select building" />
                       </SelectTrigger>
-                      <SelectContent className="bg-background z-50">
+                      <SelectContent>
                         {buildings.map((building) => (
                           <SelectItem key={building.id} value={building.id}>
                             {building.name}
@@ -621,25 +598,20 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="icon"
-                      className="h-9 w-9"
-                      onClick={() => setShowAddBuildingDialog(true)}
-                    >
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setShowAddBuildingDialog(true)}>
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1 text-xs">
+                  <Label htmlFor="flat-search" className="flex items-center gap-1 text-xs">
                     <Home className="w-3 h-3" />
                     Flat
                   </Label>
                   <div className="space-y-1">
                     <Input
+                      id="flat-search"
                       placeholder="Search flat..."
                       value={flatSearch}
                       onChange={(e) => setFlatSearch(e.target.value)}
@@ -647,15 +619,11 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                       className="h-8 text-xs"
                     />
                     <div className="flex gap-1">
-                      <Select 
-                        value={selectedFlat} 
-                        onValueChange={setSelectedFlat}
-                        disabled={!selectedBuilding}
-                      >
-                        <SelectTrigger className="h-9 flex-1">
+                      <Select value={selectedFlat} onValueChange={setSelectedFlat} disabled={!selectedBuilding}>
+                        <SelectTrigger id="flat-select" className="h-9 flex-1">
                           <SelectValue placeholder={selectedBuilding ? "Select flat" : "Select building first"} />
                         </SelectTrigger>
-                        <SelectContent className="bg-background z-50 max-h-40">
+                        <SelectContent>
                           {filteredFlats.map((flat) => (
                             <SelectItem key={flat.id} value={flat.id}>
                               {flat.flat_number}
@@ -663,14 +631,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="icon"
-                        className="h-9 w-9"
-                        onClick={() => setShowAddFlatDialog(true)}
-                        disabled={!selectedBuilding}
-                      >
+                      <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setShowAddFlatDialog(true)} disabled={!selectedBuilding}>
                         <Plus className="w-4 h-4" />
                       </Button>
                     </div>
@@ -678,12 +639,13 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Tax Rate */}
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Tax Rate (%)</Label>
+                <Label htmlFor="tax-rate" className="text-xs">Tax Rate (%)</Label>
                 <Input
+                  id="tax-rate"
                   type="number"
                   placeholder="0"
                   value={taxRate}
@@ -699,8 +661,9 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
             {/* Amount Received and Change */}
             <div className="grid grid-cols-2 gap-3 p-3 bg-muted/50 rounded-lg">
               <div className="space-y-1">
-                <Label className="text-sm font-semibold">Amount Received</Label>
+                <Label htmlFor="amount-received" className="text-sm font-semibold">Amount Received</Label>
                 <Input
+                  id="amount-received"
                   type="number"
                   placeholder="0"
                   value={amountReceived}
@@ -710,7 +673,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                   className="h-10 text-base"
                 />
               </div>
-              
+
               <div className="space-y-1">
                 <Label className="text-sm font-semibold">Change to Give</Label>
                 <div className="p-2 bg-background rounded-md border-2 border-primary h-10 flex items-center">
@@ -730,6 +693,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Unpaid</span>
                 <Switch
+                  id="payment-status-switch"
                   checked={invoiceStatus === 'paid'}
                   onCheckedChange={(checked) => setInvoiceStatus(checked ? 'paid' : 'unpaid')}
                 />
@@ -757,14 +721,18 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
 
       {/* Add Building Dialog */}
       <Dialog open={showAddBuildingDialog} onOpenChange={setShowAddBuildingDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Building</DialogTitle>
+            <DialogDescription>
+              Enter the name of the new building.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Building Name</Label>
+              <Label htmlFor="new-building-name">Building Name</Label>
               <Input
+                id="new-building-name"
                 placeholder="Enter building name"
                 value={newBuildingName}
                 onChange={(e) => setNewBuildingName(e.target.value)}
@@ -785,14 +753,18 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
 
       {/* Add Flat Dialog */}
       <Dialog open={showAddFlatDialog} onOpenChange={setShowAddFlatDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Flat</DialogTitle>
+            <DialogDescription>
+              Enter the flat number for the selected building.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Flat Number</Label>
+              <Label htmlFor="new-flat-number">Flat Number</Label>
               <Input
+                id="new-flat-number"
                 placeholder="Enter flat number (e.g., 101, A-201)"
                 value={newFlatNumber}
                 onChange={(e) => setNewFlatNumber(e.target.value)}
