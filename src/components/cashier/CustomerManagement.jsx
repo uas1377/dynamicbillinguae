@@ -14,7 +14,7 @@ import {
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
-import { printHistoricalReceipt } from "@/utils/receiptService"; // New Utility Import
+import { printHistoricalReceipt } from "@/utils/receiptService";
 import {
   getStoredBuildings,
   getStoredFlats,
@@ -51,6 +51,12 @@ const CustomerManagement = () => {
   const [flatNumber, setFlatNumber] = useState('');
   const [activeBuildingId, setActiveBuildingId] = useState(null);
 
+  // Get current cashier info
+  const getCurrentCashier = () => {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    return user.cashierId || user.userId || 'Admin';
+  };
+
   useEffect(() => { 
     loadData(); 
     setBusinessSettings(getBusinessSettings());
@@ -59,6 +65,68 @@ const CustomerManagement = () => {
   const loadData = () => {
     setBuildings(getStoredBuildings());
     setAllFlats(getStoredFlats());
+  };
+
+  // Toggle single invoice payment status
+  const toggleInvoiceStatus = (invoice, e) => {
+    if (e) e.stopPropagation();
+    const newStatus = invoice.status === 'paid' ? 'unpaid' : 'paid';
+    const cashierName = getCurrentCashier();
+    
+    const updates = {
+      status: newStatus,
+      paid_by_cashier: newStatus === 'paid' ? cashierName : null,
+      paid_at: newStatus === 'paid' ? new Date().toISOString() : null
+    };
+    
+    updateInvoiceInStorage(invoice.id, updates);
+    
+    // Refresh flat invoices
+    const updatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+    setFlatInvoices(updatedInvoices);
+    
+    // Update selectedMonth if in invoices view
+    if (selectedMonth) {
+      const date = new Date(invoice.created_at || invoice.date);
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const updatedMonthInvoices = updatedInvoices.filter(inv => {
+        const invDate = new Date(inv.created_at || inv.date);
+        return `${invDate.getFullYear()}-${invDate.getMonth()}` === key;
+      });
+      setSelectedMonth(prev => ({
+        ...prev,
+        invoices: updatedMonthInvoices,
+        paid: updatedMonthInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.grand_total, 0),
+        unpaid: updatedMonthInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0)
+      }));
+    }
+    
+    // Update selectedInvoice if in detail view
+    if (selectedInvoice && selectedInvoice.id === invoice.id) {
+      setSelectedInvoice({ ...invoice, ...updates });
+    }
+    
+    toast.success(`Invoice marked as ${newStatus}`);
+  };
+
+  // Toggle all invoices in a month
+  const toggleMonthStatus = (group, targetStatus) => {
+    const cashierName = getCurrentCashier();
+    
+    group.invoices.forEach(inv => {
+      const updates = {
+        status: targetStatus,
+        paid_by_cashier: targetStatus === 'paid' ? cashierName : null,
+        paid_at: targetStatus === 'paid' ? new Date().toISOString() : null
+      };
+      updateInvoiceInStorage(inv.id, updates);
+    });
+    
+    // Refresh flat invoices
+    const updatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+    setFlatInvoices(updatedInvoices);
+    
+    toast.success(`All invoices in ${group.label} marked as ${targetStatus}`);
   };
 
   const handleEditBuilding = (b) => {
@@ -129,6 +197,33 @@ const CustomerManagement = () => {
     return (
       <div className="space-y-4 animate-in slide-in-from-right">
         <Button variant="ghost" onClick={() => setViewMode('invoices')}><ArrowLeft className="mr-2 h-4 w-4"/> Back</Button>
+        
+        {/* Payment Status Toggle */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Payment Status:</span>
+              <Badge variant={selectedInvoice.status === 'paid' ? 'default' : 'destructive'}>
+                {selectedInvoice.status?.toUpperCase() || 'UNPAID'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Unpaid</span>
+              <Switch 
+                checked={selectedInvoice.status === 'paid'}
+                onCheckedChange={() => toggleInvoiceStatus(selectedInvoice)}
+              />
+              <span className="text-sm text-muted-foreground">Paid</span>
+            </div>
+          </div>
+          {selectedInvoice.status === 'paid' && selectedInvoice.paid_by_cashier && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Received by: <span className="font-semibold">{selectedInvoice.paid_by_cashier}</span>
+              {selectedInvoice.paid_at && ` on ${new Date(selectedInvoice.paid_at).toLocaleString()}`}
+            </p>
+          )}
+        </Card>
+
         <Card id="receipt-content" className="max-w-[350px] mx-auto bg-white text-black font-mono shadow-md border-dashed">
           <CardContent className="p-4">
             <div className="text-center border-b border-black border-dashed pb-2 mb-2">
@@ -205,16 +300,30 @@ const CustomerManagement = () => {
           </div>
         </div>
         {filteredInvoices.map(inv => (
-          <Card key={inv.invoice_number} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setSelectedInvoice(inv); setViewMode('detail'); }}>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div>
-                <p className="font-bold">{inv.invoice_number}</p>
-                <p className="text-xs opacity-60">{new Date(inv.created_at).toLocaleDateString()}</p>
+          <Card key={inv.invoice_number} className="hover:bg-muted/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-center cursor-pointer" onClick={() => { setSelectedInvoice(inv); setViewMode('detail'); }}>
+                <div>
+                  <p className="font-bold">{inv.invoice_number}</p>
+                  <p className="text-xs opacity-60">{new Date(inv.created_at).toLocaleDateString()}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold">{formatCurrency(inv.grand_total)}</p>
+                  <Badge variant={inv.status === 'paid' ? 'success' : 'destructive'} className="text-[10px]">{inv.status?.toUpperCase()}</Badge>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-bold">{formatCurrency(inv.grand_total)}</p>
-                <Badge variant={inv.status === 'paid' ? 'success' : 'destructive'} className="text-[10px]">{inv.status?.toUpperCase()}</Badge>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                <span className="text-sm text-muted-foreground">Mark as {inv.status === 'paid' ? 'Unpaid' : 'Paid'}</span>
+                <Switch 
+                  checked={inv.status === 'paid'}
+                  onCheckedChange={(e) => toggleInvoiceStatus(inv, e)}
+                />
               </div>
+              {inv.status === 'paid' && inv.paid_by_cashier && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Received by: {inv.paid_by_cashier}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -225,6 +334,8 @@ const CustomerManagement = () => {
   // 3. MONTH SELECTION VIEW
   if (viewMode === 'months') {
     const totalUnpaid = flatInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0);
+    const monthlyGroups = getMonthlyGroups();
+    
     return (
       <div className="space-y-4 animate-in slide-in-from-right">
         <Button variant="ghost" onClick={() => setViewMode('list')}><ArrowLeft className="mr-2 h-4 w-4"/> Back to Flats</Button>
@@ -236,15 +347,31 @@ const CustomerManagement = () => {
           <p className="text-2xl font-black text-destructive">{formatCurrency(totalUnpaid)}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {getMonthlyGroups().map(group => (
-            <Card key={group.key} className="cursor-pointer hover:border-primary border-2" onClick={() => { setSelectedMonth(group); setViewMode('invoices'); setInvoiceFilter('all'); }}>
-              <CardHeader className="p-4 pb-2"><CardTitle className="text-md flex items-center gap-2"><Calendar className="h-4 w-4"/> {group.label}</CardTitle></CardHeader>
-              <CardContent className="p-4 pt-0 flex justify-between text-xs">
-                <span className="text-green-600 font-bold">Paid: {formatCurrency(group.paid)}</span>
-                <span className="text-destructive font-bold">Unpaid: {formatCurrency(group.unpaid)}</span>
-              </CardContent>
-            </Card>
-          ))}
+          {monthlyGroups.map(group => {
+            const allPaid = group.invoices.every(inv => inv.status === 'paid');
+            const hasUnpaid = group.invoices.some(inv => inv.status !== 'paid');
+            
+            return (
+              <Card key={group.key} className="hover:border-primary border-2">
+                <CardHeader className="p-4 pb-2 cursor-pointer" onClick={() => { setSelectedMonth(group); setViewMode('invoices'); setInvoiceFilter('all'); }}>
+                  <CardTitle className="text-md flex items-center gap-2"><Calendar className="h-4 w-4"/> {group.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 space-y-3">
+                  <div className="flex justify-between text-xs cursor-pointer" onClick={() => { setSelectedMonth(group); setViewMode('invoices'); setInvoiceFilter('all'); }}>
+                    <span className="text-green-600 font-bold">Paid: {formatCurrency(group.paid)}</span>
+                    <span className="text-destructive font-bold">Unpaid: {formatCurrency(group.unpaid)}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-xs text-muted-foreground">Mark all as {allPaid ? 'Unpaid' : 'Paid'}</span>
+                    <Switch 
+                      checked={allPaid}
+                      onCheckedChange={() => toggleMonthStatus(group, allPaid ? 'unpaid' : 'paid')}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     );
