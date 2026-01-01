@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,20 @@ const CustomerManagement = () => {
   
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', description: '', onConfirm: null });
+  
+  // Log whenever confirmDialog changes
+  useEffect(() => {
+    console.log('🔔 confirmDialog state changed:', confirmDialog);
+  }, [confirmDialog]);
+  
+  // Flag to track if switch change is user-initiated
+  const isUserActionRef = React.useRef(false);
+  
+  // Flag to prevent clicks during view transitions
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Track last click time to prevent double clicks
+  const lastClickTimeRef = React.useRef(0);
 
   // Get current cashier info
   const getCurrentCashier = () => {
@@ -80,11 +95,14 @@ const CustomerManagement = () => {
     if (e) e.stopPropagation();
     const newStatus = invoice.status === 'paid' ? 'unpaid' : 'paid';
     
-    setConfirmDialog({
-      open: true,
-      title: `Mark Invoice as ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}?`,
-      description: `Are you sure you want to mark invoice #${invoice.invoice_number} as ${newStatus}?`,
-      onConfirm: () => executeToggleInvoiceStatus(invoice, newStatus)
+    // Force immediate state update to show dialog right away
+    flushSync(() => {
+      setConfirmDialog({
+        open: true,
+        title: `Mark Invoice as ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}?`,
+        description: `Are you sure you want to mark invoice #${invoice.invoice_number} as ${newStatus}?`,
+        onConfirm: () => executeToggleInvoiceStatus(invoice, newStatus)
+      });
     });
   };
   
@@ -97,31 +115,35 @@ const CustomerManagement = () => {
       paid_at: newStatus === 'paid' ? new Date().toISOString() : null
     };
     
+    // Update in storage
     updateInvoiceInStorage(invoice.id, updates);
     
-    // Refresh flat invoices
-    const updatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
-    setFlatInvoices(updatedInvoices);
+    // Create updated invoice object
+    const updatedInvoice = { ...invoice, ...updates };
     
-    // Update selectedMonth if in invoices view
+    // Refresh flat invoices from storage
+    const allUpdatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+    setFlatInvoices(allUpdatedInvoices);
+    
+    // Update selectedMonth if in invoices view or months view
     if (selectedMonth) {
       const date = new Date(invoice.created_at || invoice.date);
       const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const updatedMonthInvoices = updatedInvoices.filter(inv => {
+      const updatedMonthInvoices = allUpdatedInvoices.filter(inv => {
         const invDate = new Date(inv.created_at || inv.date);
         return `${invDate.getFullYear()}-${invDate.getMonth()}` === key;
       });
-      setSelectedMonth(prev => ({
-        ...prev,
+      setSelectedMonth({
+        ...selectedMonth,
         invoices: updatedMonthInvoices,
         paid: updatedMonthInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.grand_total, 0),
         unpaid: updatedMonthInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0)
-      }));
+      });
     }
     
-    // Update selectedInvoice if in detail view
+    // Update selectedInvoice if in detail view - CRITICAL FIX
     if (selectedInvoice && selectedInvoice.id === invoice.id) {
-      setSelectedInvoice({ ...invoice, ...updates });
+      setSelectedInvoice(updatedInvoice);
     }
     
     toast.success(`Invoice marked as ${newStatus}`);
@@ -130,17 +152,23 @@ const CustomerManagement = () => {
 
   // Toggle all invoices in a month with confirmation
   const requestToggleMonthStatus = (group, targetStatus) => {
-    setConfirmDialog({
-      open: true,
-      title: `Mark All Invoices as ${targetStatus.charAt(0).toUpperCase() + targetStatus.slice(1)}?`,
-      description: `Are you sure you want to mark all ${group.invoices.length} invoices in ${group.label} as ${targetStatus}?`,
-      onConfirm: () => executeToggleMonthStatus(group, targetStatus)
+    console.log(`[${new Date().toISOString()}] requestToggleMonthStatus called`, { group: group.label, targetStatus });
+    
+    // Force immediate state update to show dialog right away
+    flushSync(() => {
+      setConfirmDialog({
+        open: true,
+        title: `Mark All Invoices as ${targetStatus.charAt(0).toUpperCase() + targetStatus.slice(1)}?`,
+        description: `Are you sure you want to mark all ${group.invoices.length} invoices in ${group.label} as ${targetStatus}?`,
+        onConfirm: () => executeToggleMonthStatus(group, targetStatus)
+      });
     });
   };
   
   const executeToggleMonthStatus = (group, targetStatus) => {
     const cashierName = getCurrentCashier();
     
+    // Update all invoices in the group
     group.invoices.forEach(inv => {
       const updates = {
         status: targetStatus,
@@ -150,9 +178,24 @@ const CustomerManagement = () => {
       updateInvoiceInStorage(inv.id, updates);
     });
     
-    // Refresh flat invoices
-    const updatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
-    setFlatInvoices(updatedInvoices);
+    // Refresh flat invoices from storage
+    const allUpdatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+    setFlatInvoices(allUpdatedInvoices);
+    
+    // Recalculate the current month group with fresh data
+    const updatedMonthInvoices = allUpdatedInvoices.filter(inv => {
+      const invDate = new Date(inv.created_at || inv.date);
+      return `${invDate.getFullYear()}-${invDate.getMonth()}` === group.key;
+    });
+    
+    const updatedGroup = {
+      ...group,
+      invoices: updatedMonthInvoices,
+      paid: updatedMonthInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.grand_total, 0),
+      unpaid: updatedMonthInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0)
+    };
+    
+    setSelectedMonth(updatedGroup);
     
     toast.success(`All invoices in ${group.label} marked as ${targetStatus}`);
     setConfirmDialog({ open: false, title: '', description: '', onConfirm: null });
@@ -352,7 +395,8 @@ const CustomerManagement = () => {
     return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
   };
 
-  // --- UPDATED: DETAIL VIEW (Thermal Receipt Style) ---
+  // Render content based on view mode
+  const renderContent = () => {  // --- DETAIL VIEW (Thermal Receipt Style) ---
   if (viewMode === 'detail') {
     const flatInfo = allFlats.find(f => f.id === selectedInvoice.flat_id);
     const buildingInfo = buildings.find(b => b.id === selectedInvoice.building_id);
@@ -374,7 +418,9 @@ const CustomerManagement = () => {
               <span className="text-sm text-muted-foreground">Unpaid</span>
               <Switch 
                 checked={selectedInvoice.status === 'paid'}
-                onCheckedChange={() => requestToggleInvoiceStatus(selectedInvoice)}
+                onCheckedChange={(checked) => {
+                  requestToggleInvoiceStatus(selectedInvoice);
+                }}
               />
               <span className="text-sm text-muted-foreground">Paid</span>
             </div>
@@ -449,9 +495,16 @@ const CustomerManagement = () => {
       return true;
     });
 
+    const handleBackClick = () => {
+      // Refresh invoices from storage
+      const freshInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+      setFlatInvoices(freshInvoices);
+      setViewMode('months');
+    };
+
     return (
       <div className="space-y-4 animate-in slide-in-from-right">
-        <Button variant="ghost" onClick={() => setViewMode('months')}><ArrowLeft className="mr-2 h-4 w-4"/> Back</Button>
+        <Button variant="ghost" onClick={handleBackClick}><ArrowLeft className="mr-2 h-4 w-4"/> Back</Button>
         <div className="flex justify-between items-end">
           <div>
             <h2 className="text-xl font-bold">{selectedMonth.label}</h2>
@@ -490,12 +543,20 @@ const CustomerManagement = () => {
 
   // 3. MONTH SELECTION VIEW
   if (viewMode === 'months') {
+    console.log('Rendering months view');
     const totalUnpaid = flatInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0);
     const monthlyGroups = getMonthlyGroups();
     
     return (
-      <div className="space-y-4 animate-in slide-in-from-right">
-        <Button variant="ghost" onClick={() => setViewMode('list')}><ArrowLeft className="mr-2 h-4 w-4"/> Back to Flats</Button>
+      <div className="space-y-4">
+        <Button variant="ghost" onClick={() => {
+          console.log(`[${new Date().toISOString()}] Back to Flats clicked`);
+          // Clear any pending confirmation dialogs
+          setConfirmDialog({ open: false, title: '', description: '', onConfirm: null });
+          setIsTransitioning(true);
+          setViewMode('list');
+          setTimeout(() => setIsTransitioning(false), 100);
+        }}><ArrowLeft className="mr-2 h-4 w-4"/> Back to Flats</Button>
         <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold">Flat {selectedFlat.flat_number} History</h2>
@@ -517,12 +578,64 @@ const CustomerManagement = () => {
                     <span className="text-green-600 font-bold">Paid: {formatCurrency(group.paid)}</span>
                     <span className="text-destructive font-bold">Unpaid: {formatCurrency(group.unpaid)}</span>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between pt-2 border-t">
                     <span className="text-xs text-muted-foreground">Mark all as {allPaid ? 'Unpaid' : 'Paid'}</span>
-                    <Switch 
-                      checked={allPaid}
-                      onCheckedChange={() => requestToggleMonthStatus(group, allPaid ? 'unpaid' : 'paid')}
-                    />
+                    <div
+                      onMouseDown={(e) => {
+                        const now = Date.now();
+                        const timeSinceLastClick = now - lastClickTimeRef.current;
+                        
+                        console.log(`[${new Date().toISOString()}] Toggle onMouseDown fired`, {
+                          group: group.label,
+                          allPaid,
+                          targetStatus: allPaid ? 'unpaid' : 'paid',
+                          eventType: e.type,
+                          isTrusted: e.isTrusted,
+                          buttons: e.buttons,
+                          clientX: e.clientX,
+                          clientY: e.clientY,
+                          timeSinceLastClick: `${timeSinceLastClick}ms`
+                        });
+                        
+                        // Prevent clicks within 1 second
+                        if (timeSinceLastClick < 1000) {
+                          console.warn('⚠️ CLICK BLOCKED - Too soon after previous click (debounced)');
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                        
+                        // Log a clear warning
+                        console.warn('⚠️ TOGGLE WAS CLICKED AT POSITION:', e.clientX, e.clientY);
+                        
+                        // Check if this is a real user click
+                        if (!e.isTrusted) {
+                          console.log('IGNORED - Not a trusted user event');
+                          return;
+                        }
+                        
+                        if (isTransitioning) {
+                          console.log('IGNORED - Currently transitioning');
+                          return;
+                        }
+                        
+                        // Update last click time
+                        lastClickTimeRef.current = now;
+                        
+                        e.preventDefault();
+                        e.stopPropagation();
+                        requestToggleMonthStatus(group, allPaid ? 'unpaid' : 'paid');
+                      }}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full cursor-pointer transition-colors ${
+                        allPaid ? 'bg-primary' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          allPaid ? 'translate-x-5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </div>
                   </div>
                   <Button 
                     size="sm" 
@@ -622,8 +735,21 @@ const CustomerManagement = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Confirmation Dialog */}
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, title: '', description: '', onConfirm: null })}>
+    </div>
+  );
+  }; // End of renderContent
+
+  // Main return - AlertDialog is always rendered
+  return (
+    <>
+      {renderContent()}
+      
+      {/* Confirmation Dialog - Always rendered */}
+      <AlertDialog 
+        key={confirmDialog.open ? 'open' : 'closed'} 
+        open={confirmDialog.open} 
+        onOpenChange={(open) => !open && setConfirmDialog({ open: false, title: '', description: '', onConfirm: null })}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
@@ -635,7 +761,7 @@ const CustomerManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 };
 
