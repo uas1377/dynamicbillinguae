@@ -282,6 +282,8 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
         customer_id: customer?.id || null,
         customer_phone: flat?.user_id || customer?.phone || null,
         customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
+        building_id: selectedBuilding || null,
+        flat_id: selectedFlat || null,
         items: selectedProducts,
         sub_total: calculateSubtotal(),
         tax_rate: taxRate,
