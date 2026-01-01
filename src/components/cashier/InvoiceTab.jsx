@@ -466,7 +466,6 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               <span className="text-sm font-semibold">
                 {formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'AED')}
               </span>
-              </span>
             </div>
             <Button 
               onClick={handleOpenCheckout}
