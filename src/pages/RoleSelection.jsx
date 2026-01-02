@@ -237,9 +237,19 @@ const RoleSelection = () => {
                 <p className="text-sm text-muted-foreground">
                   Scan QR code with USB scanner
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Format: &lt;id&gt;username&lt;pass&gt;password
-                </p>
+                {/* Hidden input inside dialog for USB scanner */}
+                <input
+                  ref={scannerInputRef}
+                  type="text"
+                  className="opacity-0 absolute w-0 h-0"
+                  onKeyDown={handleScannerInput}
+                  autoFocus
+                  onBlur={(e) => {
+                    if (isScannerMode && loginModal === 'cashier') {
+                      setTimeout(() => e.target?.focus(), 50);
+                    }
+                  }}
+                />
               </div>
             ) : loginModal === 'customer' ? (
               <div className="space-y-2">
@@ -283,7 +293,7 @@ const RoleSelection = () => {
               )
             )}
 
-            {loginModal && (
+            {loginModal && !isScannerMode && (
               <Button
                 onClick={() => handleLogin(loginModal)}
                 className="w-full gradient-primary text-white border-0 h-12"
@@ -295,21 +305,6 @@ const RoleSelection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden QR Scanner Input - activates on button click */}
-      {isScannerMode && loginModal === 'cashier' && (
-        <input
-          ref={scannerInputRef}
-          type="text"
-          className="absolute opacity-0 w-1 h-1 pointer-events-none"
-          onKeyDown={handleScannerInput}
-          autoFocus
-          onBlur={() => {
-            if (isScannerMode) {
-              setTimeout(() => scannerInputRef.current?.focus(), 100);
-            }
-          }}
-        />
-      )}
     </div>
   );
 };
