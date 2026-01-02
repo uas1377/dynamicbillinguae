@@ -224,11 +224,24 @@ const RoleSelection = () => {
                 onClick={() => setIsScannerMode(!isScannerMode)}
               >
                 {isScannerMode ? <Keyboard className="w-5 h-5" /> : <QrCode className="w-5 h-5" />}
-                {isScannerMode ? "Switch to Manual Login" : "Switch to QR Scan"}
+              {isScannerMode ? "Switch to Manual Login" : "Switch to QR Scan"}
               </Button>
             )}
 
-            {loginModal === 'customer' ? (
+            {loginModal === 'cashier' && isScannerMode ? (
+              <div className="text-center py-8 space-y-4">
+                <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+                  <QrCode className="w-10 h-10 text-primary" />
+                </div>
+                <p className="text-lg font-medium">Scanner Ready</p>
+                <p className="text-sm text-muted-foreground">
+                  Scan QR code with USB scanner
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Format: &lt;id&gt;username&lt;pass&gt;password
+                </p>
+              </div>
+            ) : loginModal === 'customer' ? (
               <div className="space-y-2">
                 <Label htmlFor="userId">User ID</Label>
                 <div className="relative">
