@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, FileText, DollarSign, Clock, Share2, Calendar, User, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { supabase } from "@/integrations/supabase/client";
+import { getStoredInvoices, getStoredFlats } from "@/utils/localStorageData";
 
 const CustomerPanel = () => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -33,21 +33,28 @@ const CustomerPanel = () => {
     }
   }, [navigate, sharedUserId]);
 
-  const loadCustomerInvoices = async (userId) => {
+  const loadCustomerInvoices = (userId) => {
     try {
-      // Search by user ID stored in customer_phone field or in customer name
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .or(`customer_phone.eq.${userId}`)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Failed to load customer invoices:', error.message);
-        return;
-      }
-
-      setCustomerInvoices(data || []);
+      // Get all invoices from localStorage
+      const allInvoices = getStoredInvoices();
+      
+      // Get flat info to find matching invoices
+      const flats = getStoredFlats();
+      const userFlat = flats.find(f => f.user_id === userId);
+      
+      // Filter invoices by user_id (stored in customer_phone field) or by flat phone
+      const customerInvoices = allInvoices.filter(invoice => {
+        // Match by user_id in customer_phone
+        if (invoice.customer_phone === userId) return true;
+        // Match by flat phone if exists
+        if (userFlat && invoice.customer_phone === userFlat.phone) return true;
+        return false;
+      });
+      
+      // Sort by created_at descending
+      customerInvoices.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      setCustomerInvoices(customerInvoices);
     } catch (error) {
       console.error('Failed to load customer invoices:', error.message);
     }
