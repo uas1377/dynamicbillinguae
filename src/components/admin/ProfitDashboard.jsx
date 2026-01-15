@@ -250,7 +250,7 @@ const ProfitDashboard = () => {
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="additionalCosts">Additional Costs (AED)</Label>
+                <Label htmlFor="additionalCosts">Additional Costs ({currencyCode})</Label>
                 <Input
                   id="additionalCosts"
                   type="number"
@@ -263,7 +263,7 @@ const ProfitDashboard = () => {
                 <p className="text-xs text-muted-foreground">Costs to deduct (e.g., rent, utilities)</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="extraProfit">Extra Profit (AED)</Label>
+                <Label htmlFor="extraProfit">Extra Profit ({currencyCode})</Label>
                 <Input
                   id="extraProfit"
                   type="number"

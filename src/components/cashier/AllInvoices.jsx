@@ -567,7 +567,7 @@ const AllInvoices = () => {
                                   {item.sku && <span className="text-muted-foreground mr-2">[{item.sku}]</span>}
                                   {item.name} x {item.quantity}
                                 </span>
-                                <span>{formatCurrency(item.quantity * item.amount)}</span>
+                                <span>{formatCurrency(item.quantity * item.amount, businessSettings.currencyCode || 'currency')}</span>
                               </div>
                             ))}
                           </div>
