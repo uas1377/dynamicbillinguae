@@ -6,16 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, FileText, DollarSign, Clock, Share2, Calendar, User, Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { getStoredInvoices, getStoredFlats } from "@/utils/localStorageData";
+import { getStoredInvoices, getStoredFlats, getBusinessSettings } from "@/utils/localStorageData";
 
 const CustomerPanel = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [customerInvoices, setCustomerInvoices] = useState([]);
+  const [businessSettings, setBusinessSettings] = useState({ currencyCode: 'currency' });
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sharedUserId = searchParams.get('id');
 
   useEffect(() => {
+    // Load business settings
+    const settings = getBusinessSettings();
+    setBusinessSettings(settings);
+    
     if (sharedUserId) {
       // Direct access via shared link
       const sharedUser = { userId: sharedUserId, role: 'customer' };
@@ -150,7 +155,7 @@ const CustomerPanel = () => {
                   <DollarSign className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(paidAmount)}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(paidAmount, businessSettings.currencyCode || 'currency')}</p>
                   <p className="text-muted-foreground">Paid Amount</p>
                 </div>
               </div>
@@ -164,7 +169,7 @@ const CustomerPanel = () => {
                   <DollarSign className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(unpaidAmount)}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(unpaidAmount, businessSettings.currencyCode || 'currency')}</p>
                   <p className="text-muted-foreground">Pending Amount</p>
                 </div>
               </div>
@@ -207,17 +212,17 @@ const CustomerPanel = () => {
                           </div>
                           <div className="flex items-center gap-2">
                             <DollarSign className="w-4 h-4" />
-                            <span className="font-semibold">{formatCurrency(invoice.grand_total)}</span>
+                            <span className="font-semibold">{formatCurrency(invoice.grand_total, businessSettings.currencyCode || 'currency')}</span>
                           </div>
                         </div>
                         
                          <div className="space-y-2">
                            <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                            <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total)}</p>
+                            <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total, businessSettings.currencyCode || 'currency')}</p>
                             {parseFloat(invoice.discount_amount || 0) > 0 && (
-                              <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount)}</p>
+                              <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount, businessSettings.currencyCode || 'currency')}</p>
                             )}
-                            {parseFloat(invoice.tax_amount || 0) > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.tax_amount)}</p>}
+                            {parseFloat(invoice.tax_amount || 0) > 0 && <p><span className="font-medium">Tax:</span> {formatCurrency(invoice.tax_amount, businessSettings.currencyCode || 'currency')}</p>}
                          </div>
                       </div>
 
@@ -228,7 +233,7 @@ const CustomerPanel = () => {
                             {invoice.items.map((item, index) => (
                               <div key={index} className="flex justify-between">
                                 <span>{item.name} x {item.quantity}</span>
-                                <span>{formatCurrency(item.quantity * item.amount)}</span>
+                                <span>{formatCurrency(item.quantity * item.amount, businessSettings.currencyCode || 'currency')}</span>
                               </div>
                             ))}
                           </div>

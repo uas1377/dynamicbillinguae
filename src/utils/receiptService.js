@@ -4,8 +4,8 @@ import { getStoredFlats } from "./buildingFlatStorage";
 export const printHistoricalReceipt = (invoice) => {
   const settings = getBusinessSettings();
   const flats = getStoredFlats();
-  // Detect currency from settings or default to AED
-  const currencyCode = settings.currencyCode || 'AED';
+  // Detect currency from settings or default to currency
+  const currencyCode = settings.currencyCode || 'currency';
 
   const flatInfo = flats.find(f => f.id === invoice.flat_id);
 

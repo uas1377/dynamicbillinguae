@@ -5,7 +5,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
     try {
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
-      const currencyCode = businessSettings.currencyCode || 'AED';
+      const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
@@ -189,7 +189,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
-      const currencyCode = businessSettings.currencyCode || 'AED';
+      const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       

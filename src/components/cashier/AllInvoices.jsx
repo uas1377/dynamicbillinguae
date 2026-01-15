@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, Filter, Search, Printer, Download, Clock, User, UserCheck } from "lucide-react";
+import { FileText, Filter, Search, Printer, Download, Clock, User, UserCheck, Building2, Home } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -15,12 +15,16 @@ import {
   getStoredInvoices, 
   setStoredInvoices,
   getStoredCustomers,
-  getBusinessSettings
+  getBusinessSettings,
+  getStoredBuildings,
+  getStoredFlats
 } from "@/utils/localStorageData";
 
 const AllInvoices = () => {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [buildings, setBuildings] = useState([]);
+  const [flats, setFlats] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
   const [businessSettings, setBusinessSettings] = useState({
     name: '',
@@ -28,7 +32,7 @@ const AllInvoices = () => {
     phone: '',
     email: '',
     logo: '',
-    currencyCode: 'AED'
+    currencyCode: 'currency'
   });
   const [filters, setFilters] = useState({
     status: 'all',
@@ -54,6 +58,7 @@ const AllInvoices = () => {
     loadInvoices();
     loadCustomers();
     loadBusinessSettings();
+    loadBuildingsAndFlats();
   }, []);
 
   useEffect(() => {
@@ -75,6 +80,47 @@ const AllInvoices = () => {
     setBusinessSettings(settings);
   };
 
+  const loadBuildingsAndFlats = () => {
+    setBuildings(getStoredBuildings());
+    setFlats(getStoredFlats());
+  };
+  
+  // Get filter options combining customers, buildings, and flats
+  const getFilterOptions = () => {
+    const options = [];
+    
+    // Add customers
+    customers.forEach(customer => {
+      options.push({
+        value: `customer:${customer.phone}`,
+        label: `${customer.name} - ${customer.phone}`,
+        type: 'customer'
+      });
+    });
+    
+    // Add buildings
+    buildings.forEach(building => {
+      options.push({
+        value: `building:${building.id}`,
+        label: `🏢 ${building.name}`,
+        type: 'building'
+      });
+    });
+    
+    // Add flats with building info
+    flats.forEach(flat => {
+      const building = buildings.find(b => b.id === flat.building_id);
+      const buildingName = building?.name || 'Unknown';
+      options.push({
+        value: `flat:${flat.id}`,
+        label: `🏠 ${buildingName} - Flat ${flat.flat_number}${flat.phone ? ` (${flat.phone})` : ''}`,
+        type: 'flat'
+      });
+    });
+    
+    return options;
+  };
+
   const applyFilters = () => {
     let filtered = [...invoices];
 
@@ -83,9 +129,31 @@ const AllInvoices = () => {
       filtered = filtered.filter(invoice => invoice.status === filters.status);
     }
 
-    // Filter by customer
+    // Filter by customer/building/flat
     if (filters.customer !== 'all') {
-      filtered = filtered.filter(invoice => invoice.customer_phone === filters.customer);
+      const [filterType, filterValue] = filters.customer.split(':');
+      
+      if (filterType === 'customer') {
+        filtered = filtered.filter(invoice => invoice.customer_phone === filterValue);
+      } else if (filterType === 'building') {
+        // Find all flats in this building
+        const buildingFlats = flats.filter(f => f.building_id === filterValue);
+        const buildingFlatPhones = buildingFlats.map(f => f.phone).filter(Boolean);
+        const buildingFlatIds = buildingFlats.map(f => f.id);
+        
+        filtered = filtered.filter(invoice => 
+          buildingFlatPhones.includes(invoice.customer_phone) ||
+          buildingFlatIds.includes(invoice.flat_id)
+        );
+      } else if (filterType === 'flat') {
+        const flat = flats.find(f => f.id === filterValue);
+        if (flat) {
+          filtered = filtered.filter(invoice => 
+            invoice.customer_phone === flat.phone ||
+            invoice.flat_id === filterValue
+          );
+        }
+      }
     }
     
     // Filter by month
@@ -309,16 +377,16 @@ const AllInvoices = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="customer-filter">Customer</Label>
+              <Label htmlFor="customer-filter">Customer / Building / Flat</Label>
               <Select value={filters.customer} onValueChange={(value) => setFilters({ ...filters, customer: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Filter by customer" />
+                  <SelectValue placeholder="Filter by customer, building or flat" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.phone}>
-                      {customer.name} - {customer.phone}
+                  <SelectItem value="all">All</SelectItem>
+                  {getFilterOptions().map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -379,7 +447,7 @@ const AllInvoices = () => {
               All Invoices ({filteredInvoices.length})
             </div>
             <div className="text-sm text-muted-foreground">
-              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total), 0), businessSettings.currencyCode || 'AED')}
+              Total: {formatCurrency(filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total), 0), businessSettings.currencyCode || 'currency')}
             </div>
           </CardTitle>
         </CardHeader>
@@ -396,7 +464,7 @@ const AllInvoices = () => {
             <div className="space-y-4">
               {filteredInvoices.map((invoice) => {
                 const { date, time } = formatDateTime(invoice.created_at || invoice.date);
-                const amountPaid = invoice.status === 'unpaid' ? '0.00 (unpaid)' : formatCurrency(invoice.amount_received || invoice.grand_total, businessSettings.currencyCode || 'AED');
+                const amountPaid = invoice.status === 'unpaid' ? '0.00 (unpaid)' : formatCurrency(invoice.amount_received || invoice.grand_total, businessSettings.currencyCode || 'currency');
                 
                 return (
                   <Card key={invoice.id} className="border shadow-sm">
@@ -441,7 +509,7 @@ const AllInvoices = () => {
                             />
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total, businessSettings.currencyCode || 'AED')}</p>
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(invoice.grand_total, businessSettings.currencyCode || 'currency')}</p>
                           </div>
                         </div>
                       </div>
@@ -460,25 +528,25 @@ const AllInvoices = () => {
                             <p><span className="font-medium">Customer:</span> {invoice.customer_name}</p>
                           )}
                           {invoice.customer_phone && (
-                            <p><span className="font-medium">Phone:</span> {invoice.customer_phone}</p>
+                            <p><span className="font-medium">ID:</span> {invoice.customer_phone}</p>
                           )}
                         </div>
                         
                         <div className="space-y-1">
                           <p><span className="font-medium">Items:</span> {invoice.items.length}</p>
-                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total, businessSettings.currencyCode || 'AED')}</p>
+                          <p><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.sub_total, businessSettings.currencyCode || 'currency')}</p>
                           {parseFloat(invoice.discount_amount || 0) > 0 && (
-                            <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount, businessSettings.currencyCode || 'AED')}</p>
+                            <p><span className="font-medium">Discount:</span> -{formatCurrency(invoice.discount_amount, businessSettings.currencyCode || 'currency')}</p>
                           )}
                           {parseFloat(invoice.tax_amount) > 0 && (
-                            <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount, businessSettings.currencyCode || 'AED')}</p>
+                            <p><span className="font-medium">Tax ({invoice.tax_rate}%):</span> {formatCurrency(invoice.tax_amount, businessSettings.currencyCode || 'currency')}</p>
                           )}
                         </div>
                         
                         <div className="space-y-1">
                           <p><span className="font-medium">Amount Paid:</span> {amountPaid}</p>
                           {invoice.status === 'paid' && parseFloat(invoice.change_amount || 0) > 0 && (
-                            <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount, businessSettings.currencyCode || 'AED')}</p>
+                            <p><span className="font-medium">Change:</span> {formatCurrency(invoice.change_amount, businessSettings.currencyCode || 'currency')}</p>
                           )}
                           {invoice.status === 'paid' && invoice.paid_by_cashier && (
                             <p className="flex items-center gap-1 text-green-600">

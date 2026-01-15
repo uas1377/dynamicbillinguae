@@ -26,12 +26,12 @@ const AddProduct = () => {
   });
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [currencyCode, setCurrencyCode] = useState('AED');
+  const [currencyCode, setCurrencyCode] = useState('currency');
 
   useEffect(() => {
     loadProducts();
     const settings = getBusinessSettings();
-    setCurrencyCode(settings.currencyCode || 'AED');
+    setCurrencyCode(settings.currencyCode || 'currency');
   }, []);
 
   const loadProducts = () => {

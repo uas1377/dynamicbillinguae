@@ -21,6 +21,10 @@ const BillToSection = ({ billTo, handleInputChange, selectedCurrency, setSelecte
             <RadioGroupItem value="USD" id="usd" />
             <Label htmlFor="usd">USD ($)</Label>
           </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="currency" id="currency" />
+            <Label htmlFor="currency">Other (currency)</Label>
+          </div>
         </RadioGroup>
       </div>
       <h2 className="text-2xl font-semibold mb-4">Bill To</h2>

@@ -153,9 +153,9 @@ export const addCustomerToStorage = (customer) => {
 
 // Business Settings
 export const getBusinessSettings = () => {
-  if (!hasWindow()) return { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection', currencyCode: 'AED' };
+  if (!hasWindow()) return { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection', currencyCode: 'currency' };
   const raw = window.localStorage.getItem(BUSINESS_SETTINGS_KEY);
-  return safeParse(raw, { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection', currencyCode: 'AED' });
+  return safeParse(raw, { name: '', address: '', phone: '', email: '', logo: '', defaultPanel: 'role-selection', currencyCode: 'currency' });
 };
 
 export const setBusinessSettings = (settings) => {

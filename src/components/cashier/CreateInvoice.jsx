@@ -350,10 +350,10 @@ const CreateInvoice = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-xs">
-                        {formatCurrency(product.amount, businessSettings.currencyCode || 'AED')}
+                        {formatCurrency(product.amount, businessSettings.currencyCode || 'currency')}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-xs">
-                        {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'AED')}
+                        {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'currency')}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -464,7 +464,7 @@ const CreateInvoice = () => {
               <div className="space-y-1">
                 <Label className="text-sm font-semibold">Change to Give</Label>
                 <div className="p-2 bg-background rounded-md border-2 border-primary h-10 flex items-center">
-                  <span className="text-lg font-bold text-primary">{formatCurrency(calculateChange(), businessSettings.currencyCode || 'AED')}</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(calculateChange(), businessSettings.currencyCode || 'currency')}</span>
                 </div>
               </div>
             </div>
