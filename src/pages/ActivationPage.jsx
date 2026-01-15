@@ -79,7 +79,7 @@ const ActivationPage = ({ onActivated }) => {
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Activate Galaxy Billing</CardTitle>
+          <CardTitle className="text-2xl font-bold">Activate dynamic Billing</CardTitle>
           <CardDescription>
             Enter your activation key to unlock the application
           </CardDescription>
@@ -143,9 +143,14 @@ const ActivationPage = ({ onActivated }) => {
             )}
           </Button>
 
-          <p className="text-xs text-center text-muted-foreground">
-            Contact your administrator if you don't have an activation key
-          </p>
+          <div className="pt-4 border-t border-slate-00 text-center">
+            <p className="text-[15px] text-slate-500 mb-1">
+              Contact: dynamiceffects1377@gmail.com
+            </p>
+            <p className="text-xs[15px] font-bold tracking- text-primary uppercase">
+              Powered by DYNAMIC EFFECTS
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
