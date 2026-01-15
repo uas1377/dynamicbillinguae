@@ -79,7 +79,7 @@ const ActivationPage = ({ onActivated }) => {
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Activate dynamic Billing</CardTitle>
+          <CardTitle className="text-2xl font-bold">Activate Dynamic Billing</CardTitle>
           <CardDescription>
             Enter your activation key to unlock the application
           </CardDescription>
