@@ -30,12 +30,12 @@ const ProfitDashboard = () => {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [adjustments, setAdjustments] = useState(getStoredAdjustments());
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState('AED');
+  const [currencyCode, setCurrencyCode] = useState('currency');
 
   useEffect(() => {
     loadAllData();
     const settings = getBusinessSettings();
-    setCurrencyCode(settings.currencyCode || 'AED');
+    setCurrencyCode(settings.currencyCode || 'currency');
   }, []);
 
   const loadAllData = () => {

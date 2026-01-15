@@ -18,7 +18,7 @@ const ProductManagement = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [currencyCode, setCurrencyCode] = useState('AED');
+  const [currencyCode, setCurrencyCode] = useState('currency');
   const [formData, setFormData] = useState({
     name: '',
     barcode: '',
@@ -32,7 +32,7 @@ const ProductManagement = () => {
   useEffect(() => {
     loadProducts();
     const settings = getBusinessSettings();
-    setCurrencyCode(settings.currencyCode || 'AED');
+    setCurrencyCode(settings.currencyCode || 'currency');
   }, []);
 
   const loadProducts = async () => {
