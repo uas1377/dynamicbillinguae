@@ -13,9 +13,9 @@ const Receipt1 = ({ data, isPrint = false }) => {
 
   return (
     <BaseTemplate2
-      width="80mm"
+      width="56mm"
       height="auto"
-      className="p-2"
+      className=""
       data={data}
       isPrint={isPrint}
     >

@@ -15,10 +15,10 @@ export const printHistoricalReceipt = (invoice) => {
     <html>
       <head>
         <style>
-          @page { size: 80mm auto; margin: 0; }
+          @page { size: 56mm auto; margin: 0; }
           body { 
             font-family: Arial, sans-serif; 
-            width: 72mm; padding: 4mm; font-size: 11px; line-height: 1.3;
+            width: 56mm; padding: 3mm; box-sizing: border-box; font-size: 10px; line-height: 1.3;
           }
           .center { text-align: center; }
           .bold { font-weight: bold; }

@@ -6,7 +6,7 @@ const Receipt4 = ({ data }) => {
   const currencySymbol = selectedCurrency === 'USD' ? '$' : (selectedCurrency || 'currency');
 
   return (
-    <div className="p-4" style={{ fontFamily: "Arial, sans-serif", fontSize: "17px" }}>
+    <div style={{ fontFamily: "Arial, sans-serif", fontSize: "12px", width: "56mm", padding: "3mm", boxSizing: "border-box" }}>
       <h2 className="text-center font-bold">{yourCompany.name}</h2>
       <p className="text-center">{yourCompany.address}</p>
       <p className="text-center">Phone Number: {yourCompany.phone}</p>

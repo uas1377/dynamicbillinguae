@@ -8,19 +8,23 @@ const compressImage = (canvas, quality = 0.7) => {
 export const generateReceiptPDF = async (receiptElement) => {
   try {
     const canvas = await html2canvas(receiptElement, {
-      scale: 2, // Increase scale for better quality
+      scale: 3,
       useCORS: true,
       logging: false,
     });
 
-    const imgData = canvas.toDataURL('image/png'); // Use PNG for better quality
+    // 56mm width = approx 212 points at 96 DPI, convert to mm for PDF
+    const pdfWidth = 56; // 56mm
+    const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
+    
+    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [canvas.width * 0.264583, canvas.height * 0.264583], // Convert px to mm
+      format: [pdfWidth, pdfHeight],
     });
 
-    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width * 0.264583, canvas.height * 0.264583);
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
     const timestamp = new Date().getTime();
     const fileName = `Receipt_${timestamp}.pdf`;
