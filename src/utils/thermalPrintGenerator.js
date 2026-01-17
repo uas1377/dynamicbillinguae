@@ -20,11 +20,12 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <style>
             body {
               margin: 0;
-              padding: 10px;
+              padding: 3mm;
               font-family: Arial, sans-serif;
-              font-size: 14px;
+              font-size: 12px;
               line-height: 1.3;
-              width: 270px;
+              width: 56mm;
+              box-sizing: border-box;
               background: white;
               color: black;
             }
@@ -65,7 +66,8 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               text-align: center;
             }
             @media print {
-              body { width: 280px; }
+              @page { size: 56mm auto; margin: 0; }
+              body { width: 56mm; padding: 3mm; }
               .no-print { display: none; }
             }
           </style>
@@ -195,11 +197,12 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       
       printContent.innerHTML = `
         <div style="
-          width: 280px;
+          width: 56mm;
           font-family: Arial, sans-serif;
-          font-size: 14px;
+          font-size: 12px;
           line-height: 1.3;
-          padding: 10px;
+          padding: 3mm;
+          box-sizing: border-box;
           background: white;
           color: black;
         ">
