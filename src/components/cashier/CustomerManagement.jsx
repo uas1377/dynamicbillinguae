@@ -215,32 +215,34 @@ const CustomerManagement = () => {
       <head>
         <title>Monthly Invoice Summary</title>
         <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
             margin: 0;
-            padding: 10px;
+            padding: 3mm;
             font-family: Arial, sans-serif;
-            font-size: 14px;
-            line-height: 1.3;
-            width: 280px;
+            font-size: 11px;
+            line-height: 1.2;
+            width: 56mm;
             background: white;
             color: black;
           }
           .center { text-align: center; }
           .bold { font-weight: bold; }
-          .large { font-size: 18px; }
-          .small { font-size: 12px; }
+          .large { font-size: 14px; }
+          .small { font-size: 9px; }
           .dashed-line { 
             border-bottom: 1px dashed #000; 
-            margin: 8px 0; 
+            margin: 6px 0; 
           }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th, td { padding: 4px 2px; text-align: left; }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          th, td { padding: 2px 1px; text-align: left; }
           th { border-bottom: 1px solid #000; }
           .text-right { text-align: right; }
           .paid { color: green; }
           .unpaid { color: red; }
           @media print {
-            body { width: 280px; }
+            @page { size: 56mm auto; margin: 0; }
+            body { width: 56mm; padding: 3mm; }
           }
         </style>
       </head>
@@ -477,9 +479,21 @@ const CustomerManagement = () => {
               )}
             </div>
 
-            <div className="mt-6 flex gap-2 no-print">
-              <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
-              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
+            <div className="mt-6 flex flex-col gap-2 no-print">
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
+                <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
+              </div>
+              <Button 
+                size="sm" 
+                className="w-full h-8 bg-red-600 hover:bg-red-700 text-white" 
+                onClick={async () => {
+                  await handleSaveDetailImage();
+                  printHistoricalReceipt(selectedInvoice);
+                }}
+              >
+                <Printer className="mr-2 h-3 w-3"/> Print & Save
+              </Button>
             </div>
           </CardContent>
         </Card>
