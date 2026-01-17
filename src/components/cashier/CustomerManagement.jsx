@@ -273,7 +273,7 @@ const CustomerManagement = () => {
               <tr>
                 <td>${inv.invoice_number}</td>
                 <td>${new Date(inv.created_at || inv.date).toLocaleDateString()}</td>
-                <td class="text-right">${formatCurrency(inv.grand_total)}</td>
+                <td class="text-right">${formatCurrency(inv.grand_total, businessSettings.currencyCode || 'currency')}</td>
                 <td class="text-right ${inv.status === 'paid' ? 'paid' : 'unpaid'}">${inv.status?.toUpperCase()}</td>
               </tr>
             `).join('')}
@@ -281,9 +281,9 @@ const CustomerManagement = () => {
         </table>
         
         <div class="dashed-line" style="margin-top: 12px; padding-top: 8px;">
-          <div style="display: flex; justify-content: space-between;"><span>Total Paid:</span><span class="paid bold">${formatCurrency(group.paid)}</span></div>
-          <div style="display: flex; justify-content: space-between;"><span>Total Unpaid:</span><span class="unpaid bold">${formatCurrency(group.unpaid)}</span></div>
-          <div style="display: flex; justify-content: space-between; font-size: 16px; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;"><span class="bold">Grand Total:</span><span class="bold">${formatCurrency(group.paid + group.unpaid)}</span></div>
+          <div style="display: flex; justify-content: space-between;"><span>Total Paid:</span><span class="paid bold">${formatCurrency(group.paid, businessSettings.currencyCode || 'currency')}</span></div>
+          <div style="display: flex; justify-content: space-between;"><span>Total Unpaid:</span><span class="unpaid bold">${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 16px; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;"><span class="bold">Grand Total:</span><span class="bold">${formatCurrency(group.paid + group.unpaid, businessSettings.currencyCode || 'currency')}</span></div>
         </div>
         
         <div class="center small" style="margin-top: 12px;">
@@ -460,14 +460,14 @@ const CustomerManagement = () => {
                 {selectedInvoice.items.map((item, i) => (
                   <tr key={i}>
                     <td className="py-1">{item.name} x{item.quantity}</td>
-                    <td className="text-right">{formatCurrency(item.amount * item.quantity)}</td>
+                    <td className="text-right">{formatCurrency(item.amount * item.quantity, businessSettings.currencyCode || 'currency')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
             <div className="border-t border-black border-dashed pt-2 space-y-1">
-              <div className="flex justify-between font-bold"><span>TOTAL:</span> <span>{formatCurrency(selectedInvoice.grand_total)}</span></div>
+              <div className="flex justify-between font-bold"><span>TOTAL:</span> <span>{formatCurrency(selectedInvoice.grand_total, businessSettings.currencyCode || 'currency')}</span></div>
               <div className="flex justify-between text-[10px]"><span>CASHIER:</span> <span>{selectedInvoice.cashier_name || 'Admin'}</span></div>
               {selectedInvoice.status === 'paid' && (
                 <div className="flex justify-between text-[10px] font-bold text-green-700">
@@ -508,7 +508,7 @@ const CustomerManagement = () => {
         <div className="flex justify-between items-end">
           <div>
             <h2 className="text-xl font-bold">{selectedMonth.label}</h2>
-            <p className="text-sm text-destructive font-semibold">Month Unpaid: {formatCurrency(selectedMonth.unpaid)}</p>
+            <p className="text-sm text-destructive font-semibold">Month Unpaid: {formatCurrency(selectedMonth.unpaid, businessSettings.currencyCode || 'currency')}</p>
           </div>
           <div className="flex gap-1 bg-muted p-1 rounded-md">
             {['all', 'paid', 'unpaid'].map(f => (
@@ -525,7 +525,7 @@ const CustomerManagement = () => {
                   <p className="text-xs opacity-60">{new Date(inv.created_at).toLocaleDateString()}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold">{formatCurrency(inv.grand_total)}</p>
+                  <p className="font-bold">{formatCurrency(inv.grand_total, businessSettings.currencyCode || 'currency')}</p>
                   <Badge variant={inv.status === 'paid' ? 'success' : 'destructive'} className="text-[10px]">{inv.status?.toUpperCase()}</Badge>
                 </div>
               </div>
@@ -562,7 +562,7 @@ const CustomerManagement = () => {
             <h2 className="text-lg font-bold">Flat {selectedFlat.flat_number} History</h2>
             <p className="text-sm">Total Pending Balance</p>
           </div>
-          <p className="text-2xl font-black text-destructive">{formatCurrency(totalUnpaid)}</p>
+          <p className="text-2xl font-black text-destructive">{formatCurrency(totalUnpaid, businessSettings.currencyCode || 'currency')}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {monthlyGroups.map(group => {
@@ -575,8 +575,8 @@ const CustomerManagement = () => {
                 </CardHeader>
                 <CardContent className="p-4 pt-0 space-y-3">
                   <div className="flex justify-between text-xs cursor-pointer" onClick={() => { setSelectedMonth(group); setViewMode('invoices'); setInvoiceFilter('all'); }}>
-                    <span className="text-green-600 font-bold">Paid: {formatCurrency(group.paid)}</span>
-                    <span className="text-destructive font-bold">Unpaid: {formatCurrency(group.unpaid)}</span>
+                    <span className="text-green-600 font-bold">Paid: {formatCurrency(group.paid, businessSettings.currencyCode || 'currency')}</span>
+                    <span className="text-destructive font-bold">Unpaid: {formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}</span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t">
                     <span className="text-xs text-muted-foreground">Mark all as {allPaid ? 'Unpaid' : 'Paid'}</span>
