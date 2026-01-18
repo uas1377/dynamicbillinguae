@@ -15,6 +15,7 @@ const RoleSelection = () => {
   const [isScannerMode, setIsScannerMode] = useState(false);
   const [credentials, setCredentials] = useState({ username: '', password: '', userId: '' });
   const [defaultPanel, setDefaultPanel] = useState(null);
+  const [businessSettings, setBusinessSettings] = useState({ name: '' });
   const navigate = useNavigate();
 
   // Hidden scanner input ref (no camera)
@@ -30,11 +31,12 @@ const RoleSelection = () => {
     }
   }, []);
 
-  // Check default panel setting
+  // Check default panel setting and load business settings
   useEffect(() => {
-    const businessSettings = getBusinessSettings();
-    if (businessSettings?.defaultPanel) {
-      setDefaultPanel(businessSettings.defaultPanel);
+    const settings = getBusinessSettings();
+    setBusinessSettings(settings);
+    if (settings?.defaultPanel) {
+      setDefaultPanel(settings.defaultPanel);
     }
   }, []);
 
@@ -151,7 +153,7 @@ const RoleSelection = () => {
         <Card className="gradient-card shadow-soft border-0 mb-8">
           <CardHeader className="text-center pb-8">
             <CardTitle className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Galaxy Billing App
+              {businessSettings.name || 'Billing App'}
             </CardTitle>
             <CardDescription className="text-xl text-muted-foreground">
               Select your role to access the system

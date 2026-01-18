@@ -702,7 +702,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
             </div>
 
             {/* Actions */}
-            <div className="grid grid-cols-3 gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-2">
               <Button onClick={printInvoice} variant="outline" className="flex items-center justify-center gap-1 h-10">
                 <Printer className="w-4 h-4" />
                 <span className="hidden sm:inline">Print</span>
@@ -711,8 +711,20 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 <Image className="w-4 h-4" />
                 <span className="hidden sm:inline">Image</span>
               </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <Button onClick={saveInvoice} className="gradient-primary text-white border-0 h-10">
                 Save
+              </Button>
+              <Button 
+                onClick={async () => {
+                  await printInvoice();
+                  saveInvoice();
+                }} 
+                className="bg-red-600 hover:bg-red-700 text-white h-10"
+              >
+                <Printer className="w-4 h-4 mr-1" />
+                Print & Save
               </Button>
             </div>
           </div>
