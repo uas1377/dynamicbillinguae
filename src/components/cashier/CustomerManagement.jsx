@@ -479,21 +479,9 @@ const CustomerManagement = () => {
               )}
             </div>
 
-            <div className="mt-6 flex flex-col gap-2 no-print">
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
-                <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
-              </div>
-              <Button 
-                size="sm" 
-                className="w-full h-8 bg-red-600 hover:bg-red-700 text-white" 
-                onClick={async () => {
-                  await handleSaveDetailImage();
-                  printHistoricalReceipt(selectedInvoice);
-                }}
-              >
-                <Printer className="mr-2 h-3 w-3"/> Print & Save
-              </Button>
+            <div className="mt-6 flex gap-2 no-print">
+              <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
+              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
             </div>
           </CardContent>
         </Card>
