@@ -153,7 +153,7 @@ const RoleSelection = () => {
         <Card className="gradient-card shadow-soft border-0 mb-8">
           <CardHeader className="text-center pb-8">
             <CardTitle className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              {businessSettings.name || 'Billing App'}
+              {businessSettings.name ? `${businessSettings.name} Billing App` : 'Billing App'}
             </CardTitle>
             <CardDescription className="text-xl text-muted-foreground">
               Select your role to access the system
