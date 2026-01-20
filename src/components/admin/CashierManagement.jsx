@@ -1,16 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Plus, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { Users, Plus, Edit, Trash2, AlertTriangle, QrCode, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
+import { QRCodeSVG } from 'qrcode.react';
+import * as htmlToImage from 'html-to-image';
 
 const CashierManagement = () => {
   const [cashiers, setCashiers] = useState([]);
   const [editingCashier, setEditingCashier] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // QR Modal States
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [selectedQRUser, setSelectedQRUser] = useState(null);
+  const qrRef = useRef(null);
+
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -27,23 +35,14 @@ const CashierManagement = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    if (!formData.username.trim()) {
-      toast.error('Username is required');
-      return;
-    }
-    
-    if (!formData.password.trim()) {
-      toast.error('Password is required');
+    if (!formData.username.trim() || !formData.password.trim()) {
+      toast.error('All fields are required');
       return;
     }
 
     const updatedCashiers = [...cashiers];
-    
-    // Check if username already exists (excluding current editing cashier)
     const existingCashier = updatedCashiers.find(c => 
-      c.username === formData.username.trim() && 
-      (!editingCashier || c.id !== editingCashier.id)
+      c.username === formData.username.trim() && (!editingCashier || c.id !== editingCashier.id)
     );
     
     if (existingCashier) {
@@ -61,12 +60,11 @@ const CashierManagement = () => {
       updatedCashiers[index] = { ...editingCashier, ...cashierData };
       toast.success('Cashier updated successfully');
     } else {
-      const newCashier = {
+      updatedCashiers.push({
         id: Date.now().toString(),
         ...cashierData,
         createdAt: new Date().toISOString()
-      };
-      updatedCashiers.push(newCashier);
+      });
       toast.success('Cashier added successfully');
     }
 
@@ -90,16 +88,27 @@ const CashierManagement = () => {
     setFormData({ username: '', password: '' });
   };
 
-  const deleteCashier = (cashierId) => {
-    if (cashiers.length <= 1) {
-      toast.error('Cannot delete the last cashier. At least one cashier must remain.');
-      return;
+  // --- QR Badge Logic ---
+  const openQRModal = (cashier) => {
+    setSelectedQRUser(cashier);
+    setIsQRModalOpen(true);
+  };
+
+  const saveQRAsImage = async () => {
+    if (!qrRef.current) return;
+    try {
+      const dataUrl = await htmlToImage.toPng(qrRef.current, { 
+        backgroundColor: 'white',
+        pixelRatio: 3 
+      });
+      const link = document.createElement('a');
+      link.download = `Badge-${selectedQRUser.username}.png`;
+      link.href = dataUrl;
+      link.click();
+      toast.success("Badge saved to gallery");
+    } catch (err) {
+      toast.error("Failed to save image");
     }
-    
-    const updatedCashiers = cashiers.filter(c => c.id !== cashierId);
-    localStorage.setItem('cashiers', JSON.stringify(updatedCashiers));
-    setCashiers(updatedCashiers);
-    toast.success('Cashier deleted successfully');
   };
 
   return (
@@ -108,7 +117,7 @@ const CashierManagement = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Cashier Management ({cashiers.length} cashiers)
+            Cashier Management ({cashiers.length})
           </CardTitle>
           <Button onClick={() => openDialog()} className="gradient-primary text-white border-0 flex items-center gap-2">
             <Plus className="w-4 h-4" />
@@ -118,45 +127,48 @@ const CashierManagement = () => {
         <CardContent>
           <div className="grid gap-4">
             {cashiers.map((cashier) => (
-              <Card key={cashier.id} className="border shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">{cashier.username}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Created: {new Date(cashier.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDialog(cashier)}
-                        className="flex items-center gap-1"
-                      >
-                        <Edit className="w-3 h-3" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteCashier(cashier.id)}
-                        disabled={cashiers.length <= 1}
-                        className="flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Delete
-                      </Button>
-                    </div>
+              <Card key={cashier.id} className="border shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg">{cashier.username}</h3>
+                    <p className="text-xs text-muted-foreground uppercase font-medium">
+                      Status: Active • Since {new Date(cashier.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
                   
-                  {cashiers.length <= 1 && (
-                    <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2 text-sm text-yellow-800">
-                      <AlertTriangle className="w-4 h-4" />
-                      This is the last cashier and cannot be deleted.
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openQRModal(cashier)}
+                      className="border-primary text-primary hover:bg-primary/5 gap-1"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      QR Badge
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openDialog(cashier)}
+                      className="gap-1"
+                    >
+                      <Edit className="w-3 h-3" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={cashiers.length <= 1}
+                      onClick={() => {
+                        const updated = cashiers.filter(c => c.id !== cashier.id);
+                        localStorage.setItem('cashiers', JSON.stringify(updated));
+                        setCashiers(updated);
+                        toast.success('Cashier removed');
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -164,46 +176,68 @@ const CashierManagement = () => {
         </CardContent>
       </Card>
 
+      {/* ADD/EDIT DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="gradient-card border-0">
           <DialogHeader>
-            <DialogTitle>
-              {editingCashier ? 'Edit Cashier' : 'Add New Cashier'}
-            </DialogTitle>
+            <DialogTitle>{editingCashier ? 'Update Credentials' : 'Create Staff Account'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username *</Label>
-              <Input
-                id="username"
-                placeholder="Enter username"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                required
-              />
+              <Label>Username</Label>
+              <Input value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} required />
             </div>
-            
             <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-              />
+              <Label>Password</Label>
+              <Input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required />
             </div>
-            
-            <div className="flex gap-3 justify-end">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" className="gradient-primary text-white border-0">
-                {editingCashier ? 'Update Cashier' : 'Add Cashier'}
-              </Button>
+            <div className="flex gap-2 justify-end pt-4">
+              <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button type="submit" className="gradient-primary">Save Changes</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR BADGE MODAL */}
+      <Dialog open={isQRModalOpen} onOpenChange={setIsQRModalOpen}>
+        <DialogContent className="sm:max-w-[350px] border-2 border-primary/20">
+          <DialogHeader>
+            <DialogTitle className="text-center">Cashier Login Badge</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center gap-6 py-4">
+            {/* The Badge Visual */}
+            <div 
+              ref={qrRef}
+              className="p-6 bg-white rounded-xl shadow-xl flex flex-col items-center text-center border-4 border-slate-100"
+            >
+              <div className="mb-4 bg-primary text-white text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-widest">
+                Official Staff ID
+              </div>
+              
+              <QRCodeSVG 
+                value={`<id>${selectedQRUser?.username}<pass>${selectedQRUser?.password}`} 
+                size={160}
+                level="H"
+                includeMargin={true}
+              />
+              
+              <h2 className="mt-4 text-xl font-black text-slate-900 tracking-tight">
+                {selectedQRUser?.username.toUpperCase()}
+              </h2>
+              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Scan at Login Panel</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 w-full">
+              <Button variant="outline" className="gap-2" onClick={saveQRAsImage}>
+                <Download className="w-4 h-4" /> Save
+              </Button>
+              <Button className="gradient-primary gap-2" onClick={() => window.print()}>
+                <Printer className="w-4 h-4" /> Print
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
