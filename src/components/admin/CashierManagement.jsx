@@ -99,7 +99,12 @@ const CashierManagement = () => {
     try {
       const dataUrl = await htmlToImage.toPng(qrRef.current, { 
         backgroundColor: 'white',
-        pixelRatio: 3 
+        pixelRatio: 3,
+        filter: (node) => {
+          // Exclude Vite's error overlay elements
+          if (node.tagName === 'VITE-ERROR-OVERLAY') return false;
+          return true;
+        }
       });
       const link = document.createElement('a');
       link.download = `Badge-${selectedQRUser.username}.png`;
@@ -107,6 +112,7 @@ const CashierManagement = () => {
       link.click();
       toast.success("Badge saved to gallery");
     } catch (err) {
+      console.error('Image save error:', err);
       toast.error("Failed to save image");
     }
   };
