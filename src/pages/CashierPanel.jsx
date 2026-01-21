@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
-import { Package, Users, FileText, List, LogOut } from "lucide-react";
+import { Package, Users, FileText, List, LogOut, Settings } from "lucide-react";
 import AddProduct from "@/components/cashier/AddProduct";
 import CustomerManagement from "@/components/cashier/CustomerManagement";
 import CreateInvoiceTabs from "@/components/cashier/CreateInvoiceTabs";
 import AllInvoices from "@/components/cashier/AllInvoices";
+import BluetoothPrinterDialog from "@/components/cashier/BluetoothPrinterDialog";
 
 const CashierPanel = () => {
   const navigate = useNavigate();
@@ -18,8 +19,8 @@ const CashierPanel = () => {
   const [activeInvoiceTab, setActiveInvoiceTab] = useState(1);
   const [nextInvoiceTabId, setNextInvoiceTabId] = useState(2);
   
-  // Store each tab's data to persist when switching tabs
   const [tabsData, setTabsData] = useState({});
+  const [showPrinterDialog, setShowPrinterDialog] = useState(false);
 
   useEffect(() => {
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
@@ -93,10 +94,20 @@ const CashierPanel = () => {
               <CardTitle className="text-3xl font-bold text-primary">Cashier Panel</CardTitle>
               <p className="text-muted-foreground mt-2">Welcome back, {currentUser.username}</p>
             </div>
-            <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={() => setShowPrinterDialog(true)} 
+                variant="outline" 
+                className="flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Printer
+              </Button>
+              <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            </div>
           </CardHeader>
         </Card>
 
@@ -145,6 +156,11 @@ const CashierPanel = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <BluetoothPrinterDialog 
+        open={showPrinterDialog} 
+        onOpenChange={setShowPrinterDialog} 
+      />
     </div>
   );
 };
