@@ -1,175 +1,319 @@
 import html2canvas from 'html2canvas';
 import { getPaperConfig } from './paperSizes';
 
-export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
-  return new Promise((resolve, reject) => {
+// Check if a Bluetooth printer is connected
+export const isBluetoothPrinterConnected = () => {
+  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  return !!savedDevice;
+};
+
+// Get connected Bluetooth printer info
+export const getConnectedPrinter = () => {
+  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  if (savedDevice) {
     try {
-      const businessSettings = invoiceData.yourCompany || {};
-      const actualBusinessName = businessSettings.name || businessName;
-      const currencyCode = businessSettings.currencyCode || 'currency';
-      const isPaid = invoiceData.status !== 'unpaid';
-      const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+      return JSON.parse(savedDevice);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+};
+
+// Generate receipt HTML content for printing
+const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
+  const businessSettings = invoiceData.yourCompany || {};
+  const actualBusinessName = businessSettings.name || businessName;
+  const currencyCode = businessSettings.currencyCode || 'currency';
+  const isPaid = invoiceData.status !== 'unpaid';
+  const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+  
+  // Get paper configuration with font sizes
+  const paperConfig = getPaperConfig();
+  const { width: paperWidth, paddingSide, baseFontSize, largeFontSize, smallFontSize, itemFontSize } = paperConfig;
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Thermal Receipt</title>
+      <style>
+        body {
+          margin: 0;
+          padding: ${paddingSide};
+          font-family: Arial, sans-serif;
+          font-size: ${baseFontSize};
+          line-height: 1.3;
+          width: ${paperWidth};
+          box-sizing: border-box;
+          background: white;
+          color: black;
+        }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .large { font-size: ${largeFontSize}; }
+        .small { font-size: ${smallFontSize}; }
+        .dashed-line { 
+          border-bottom: 1px dashed #000; 
+          margin: 8px 0; 
+        }
+        .flex { 
+          display: flex; 
+          justify-content: space-between; 
+        }
+        .item-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px;
+          font-size: ${itemFontSize};
+        }
+        .item-name { flex: 1; min-width: 0; }
+        .item-sku { width: 50px; font-size: ${smallFontSize}; color: #666; }
+        .item-qty { width: 25px; text-align: center; }
+        .item-rate { width: 45px; text-align: right; }
+        .item-amount { width: 50px; text-align: right; }
+        .change-box {
+          background: #f0f0f0;
+          padding: 8px;
+          margin: 8px 0;
+          border-radius: 4px;
+        }
+        .customer-id {
+          background: #e8f5e9;
+          padding: 6px;
+          margin: 6px 0;
+          border-radius: 4px;
+          text-align: center;
+        }
+        @media print {
+          @page { size: ${paperWidth} auto; margin: 0; }
+          body { width: ${paperWidth}; padding: ${paddingSide}; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="center dashed-line">
+        ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
+        <div class="large bold">${actualBusinessName}</div>
+        ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
+        ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
+        ${businessSettings.email ? `<div class="small">${businessSettings.email}</div>` : ''}
+      </div>
       
-      // Get paper configuration
-      const paperConfig = getPaperConfig();
-      const paperWidth = paperConfig.width;
-      const paddingSide = paperConfig.paddingSide;
+      <div>
+        <div class="flex">
+          <span>Invoice: ${invoiceData.invoiceNumber}</span>
+        </div>
+        <div class="flex">
+          <span>Date: ${new Date().toLocaleDateString()}</span>
+          <span>Time: ${new Date().toLocaleTimeString()}</span>
+        </div>
+        ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
+        ${invoiceData.customerId ? `
+          <div class="customer-id">
+            <span class="small">Customer ID:</span>
+            <span class="bold" style="font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${invoiceData.customerId}</span>
+          </div>
+        ` : ''}
+        ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
+        ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
+      </div>
+      
+      <div class="dashed-line">
+        <div class="item-row bold">
+          <span class="item-name">Item</span>
+          <span class="item-sku">SKU</span>
+          <span class="item-qty">Qty</span>
+          <span class="item-rate">Rate</span>
+          <span class="item-amount">Amount</span>
+        </div>
+      </div>
+      
+      ${invoiceData.items.map(item => `
+        <div class="item-row">
+          <span class="item-name">${item.name}</span>
+          <span class="item-sku">${item.sku || '-'}</span>
+          <span class="item-qty">${item.quantity}</span>
+          <span class="item-rate">${item.amount}</span>
+          <span class="item-amount">${(item.quantity * item.amount).toFixed(2)}</span>
+        </div>
+      `).join('')}
+      
+      <div class="dashed-line">
+        <div class="flex">
+          <span>Subtotal:</span>
+          <span>${currencyCode} ${invoiceData.subTotal}</span>
+        </div>
+        ${invoiceData.discountAmount > 0 ? `
+          <div class="flex">
+            <span>Discount:</span>
+            <span>-${currencyCode} ${invoiceData.discountAmount}</span>
+          </div>
+        ` : ''}
+        ${invoiceData.taxAmount > 0 ? `
+          <div class="flex">
+            <span>Tax (${invoiceData.taxRate}%):</span>
+            <span>${currencyCode} ${invoiceData.taxAmount}</span>
+          </div>
+        ` : ''}
+        <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
+          <span>Total:</span>
+          <span>${currencyCode} ${invoiceData.grandTotal}</span>
+        </div>
+      </div>
+      
+      <div class="change-box">
+        <div class="flex">
+          <span>Amount Paid:</span>
+          <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
+        </div>
+        ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
+          <div class="flex bold large">
+            <span>Change:</span>
+            <span>${currencyCode} ${invoiceData.changeAmount}</span>
+          </div>
+        ` : ''}
+      </div>
+      
+      <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
+        <div>Thank you for shopping!</div>
+        <div>Visit again</div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Send data directly to Bluetooth printer using Web Bluetooth API
+const sendToBluetoothPrinter = async (invoiceData, businessName = 'Business Name') => {
+  try {
+    // Request device with serial port service
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Serial Port Profile UUID
+    });
+    
+    const server = await device.gatt.connect();
+    
+    // Generate plain text receipt for ESC/POS printers
+    const receiptText = generatePlainTextReceipt(invoiceData, businessName);
+    
+    // Try to find a writable characteristic
+    const services = await server.getPrimaryServices();
+    
+    for (const service of services) {
+      const characteristics = await service.getCharacteristics();
+      for (const char of characteristics) {
+        if (char.properties.write || char.properties.writeWithoutResponse) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(receiptText);
+          await char.writeValue(data);
+          return true;
+        }
+      }
+    }
+    
+    throw new Error('No writable characteristic found');
+  } catch (error) {
+    console.error('Bluetooth print error:', error);
+    throw error;
+  }
+};
+
+// Generate plain text receipt for direct printing
+const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') => {
+  const businessSettings = invoiceData.yourCompany || {};
+  const actualBusinessName = businessSettings.name || businessName;
+  const currencyCode = businessSettings.currencyCode || 'AED';
+  const isPaid = invoiceData.status !== 'unpaid';
+  const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+  
+  let receipt = '';
+  
+  // Header
+  receipt += '\x1B\x40'; // Initialize printer
+  receipt += '\x1B\x61\x01'; // Center alignment
+  receipt += '\x1B\x21\x30'; // Double height and width
+  receipt += actualBusinessName + '\n';
+  receipt += '\x1B\x21\x00'; // Normal text
+  if (businessSettings.address) receipt += businessSettings.address + '\n';
+  if (businessSettings.phone) receipt += 'Tel: ' + businessSettings.phone + '\n';
+  receipt += '\n';
+  
+  // Invoice details
+  receipt += '\x1B\x61\x00'; // Left alignment
+  receipt += '--------------------------------\n';
+  receipt += 'Invoice: ' + invoiceData.invoiceNumber + '\n';
+  receipt += 'Date: ' + new Date().toLocaleDateString() + '\n';
+  receipt += 'Time: ' + new Date().toLocaleTimeString() + '\n';
+  if (invoiceData.customerName) receipt += 'Customer: ' + invoiceData.customerName + '\n';
+  if (invoiceData.cashierName) receipt += 'Cashier: ' + invoiceData.cashierName + '\n';
+  receipt += '--------------------------------\n';
+  
+  // Items
+  invoiceData.items.forEach(item => {
+    const itemTotal = (item.quantity * item.amount).toFixed(2);
+    receipt += item.name.substring(0, 16).padEnd(16);
+    receipt += (item.quantity + 'x' + item.amount).padStart(8);
+    receipt += itemTotal.padStart(8) + '\n';
+  });
+  
+  receipt += '--------------------------------\n';
+  
+  // Totals
+  receipt += ('Subtotal: ' + currencyCode + ' ' + invoiceData.subTotal).padStart(32) + '\n';
+  if (invoiceData.discountAmount > 0) {
+    receipt += ('Discount: -' + currencyCode + ' ' + invoiceData.discountAmount).padStart(32) + '\n';
+  }
+  if (invoiceData.taxAmount > 0) {
+    receipt += ('Tax (' + invoiceData.taxRate + '%): ' + currencyCode + ' ' + invoiceData.taxAmount).padStart(32) + '\n';
+  }
+  receipt += '\x1B\x21\x10'; // Bold
+  receipt += ('TOTAL: ' + currencyCode + ' ' + invoiceData.grandTotal).padStart(32) + '\n';
+  receipt += '\x1B\x21\x00'; // Normal
+  
+  receipt += '--------------------------------\n';
+  receipt += 'Amount Paid: ' + currencyCode + ' ' + amountPaidDisplay + '\n';
+  if (isPaid && parseFloat(invoiceData.changeAmount) > 0) {
+    receipt += 'Change: ' + currencyCode + ' ' + invoiceData.changeAmount + '\n';
+  }
+  
+  // Footer
+  receipt += '\n';
+  receipt += '\x1B\x61\x01'; // Center
+  receipt += 'Thank you for shopping!\n';
+  receipt += 'Visit again\n';
+  receipt += '\n\n\n';
+  receipt += '\x1D\x56\x00'; // Cut paper
+  
+  return receipt;
+};
+
+export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Check if Bluetooth printer is connected - try direct printing first
+      const connectedPrinter = getConnectedPrinter();
+      
+      if (connectedPrinter && navigator.bluetooth) {
+        try {
+          await sendToBluetoothPrinter(invoiceData, businessName);
+          resolve();
+          return;
+        } catch (btError) {
+          console.log('Bluetooth print failed, falling back to system print:', btError);
+          // Fall through to system print dialog
+        }
+      }
+      
+      // Fallback: Generate HTML and use system print (for Thermer app or regular printing)
+      const htmlContent = generateReceiptHTML(invoiceData, businessName);
       
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       const printDocument = printWindow.document;
       
-      printDocument.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Thermal Receipt</title>
-          <style>
-            body {
-              margin: 0;
-              padding: ${paddingSide};
-              font-family: Arial, sans-serif;
-              font-size: 12px;
-              line-height: 1.3;
-              width: ${paperWidth};
-              box-sizing: border-box;
-              background: white;
-              color: black;
-            }
-            .center { text-align: center; }
-            .bold { font-weight: bold; }
-            .large { font-size: 18px; }
-            .small { font-size: 12px; }
-            .dashed-line { 
-              border-bottom: 1px dashed #000; 
-              margin: 8px 0; 
-            }
-            .flex { 
-              display: flex; 
-              justify-content: space-between; 
-            }
-            .item-row {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 4px;
-              font-size: 11px;
-            }
-            .item-name { flex: 1; min-width: 0; }
-            .item-sku { width: 50px; font-size: 9px; color: #666; }
-            .item-qty { width: 25px; text-align: center; }
-            .item-rate { width: 45px; text-align: right; }
-            .item-amount { width: 50px; text-align: right; }
-            .change-box {
-              background: #f0f0f0;
-              padding: 8px;
-              margin: 8px 0;
-              border-radius: 4px;
-            }
-            .customer-id {
-              background: #e8f5e9;
-              padding: 6px;
-              margin: 6px 0;
-              border-radius: 4px;
-              text-align: center;
-            }
-            @media print {
-              @page { size: ${paperWidth} auto; margin: 0; }
-              body { width: ${paperWidth}; padding: ${paddingSide}; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="center dashed-line">
-            ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
-            <div class="large bold">${actualBusinessName}</div>
-            ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
-            ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
-            ${businessSettings.email ? `<div class="small">${businessSettings.email}</div>` : ''}
-          </div>
-          
-          <div>
-            <div class="flex">
-              <span>Invoice: ${invoiceData.invoiceNumber}</span>
-            </div>
-            <div class="flex">
-              <span>Date: ${new Date().toLocaleDateString()}</span>
-              <span>Time: ${new Date().toLocaleTimeString()}</span>
-            </div>
-            ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
-            ${invoiceData.customerId ? `
-              <div class="customer-id">
-                <span class="small">Customer ID:</span>
-                <span class="bold" style="font-size: 14px; font-family: monospace;">${invoiceData.customerId}</span>
-              </div>
-            ` : ''}
-            ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
-            ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
-          </div>
-          
-          <div class="dashed-line">
-            <div class="item-row bold">
-              <span class="item-name">Item</span>
-              <span class="item-sku">SKU</span>
-              <span class="item-qty">Qty</span>
-              <span class="item-rate">Rate</span>
-              <span class="item-amount">Amount</span>
-            </div>
-          </div>
-          
-          ${invoiceData.items.map(item => `
-            <div class="item-row">
-              <span class="item-name">${item.name}</span>
-              <span class="item-sku">${item.sku || '-'}</span>
-              <span class="item-qty">${item.quantity}</span>
-              <span class="item-rate">${item.amount}</span>
-              <span class="item-amount">${(item.quantity * item.amount).toFixed(2)}</span>
-            </div>
-          `).join('')}
-          
-          <div class="dashed-line">
-            <div class="flex">
-              <span>Subtotal:</span>
-              <span>${currencyCode} ${invoiceData.subTotal}</span>
-            </div>
-            ${invoiceData.discountAmount > 0 ? `
-              <div class="flex">
-                <span>Discount:</span>
-                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
-              </div>
-            ` : ''}
-            ${invoiceData.taxAmount > 0 ? `
-              <div class="flex">
-                <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>${currencyCode} ${invoiceData.taxAmount}</span>
-              </div>
-            ` : ''}
-            <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
-              <span>Total:</span>
-              <span>${currencyCode} ${invoiceData.grandTotal}</span>
-            </div>
-          </div>
-          
-          <div class="change-box">
-            <div class="flex">
-              <span>Amount Paid:</span>
-              <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
-            </div>
-            ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
-              <div class="flex bold large">
-                <span>Change:</span>
-                <span>${currencyCode} ${invoiceData.changeAmount}</span>
-              </div>
-            ` : ''}
-          </div>
-          
-          <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
-            <div>Thank you for shopping!</div>
-            <div>Visit again</div>
-          </div>
-        </body>
-        </html>
-      `);
-      
+      printDocument.write(htmlContent);
       printDocument.close();
       
       setTimeout(() => {
@@ -201,16 +345,15 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
-      // Get paper configuration
+      // Get paper configuration with font sizes
       const paperConfig = getPaperConfig();
-      const paperWidth = paperConfig.width;
-      const paddingSide = paperConfig.paddingSide;
+      const { width: paperWidth, paddingSide, baseFontSize, largeFontSize, smallFontSize, itemFontSize } = paperConfig;
       
       printContent.innerHTML = `
         <div style="
           width: ${paperWidth};
           font-family: Arial, sans-serif;
-          font-size: 12px;
+          font-size: ${baseFontSize};
           line-height: 1.3;
           padding: ${paddingSide};
           box-sizing: border-box;
@@ -219,10 +362,10 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
         ">
           <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
             ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px; display: block;" />` : ''}
-            <div style="font-size: 18px; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
-            ${businessSettings.address ? `<div style="font-size: 12px;">${businessSettings.address}</div>` : ''}
-            ${businessSettings.phone ? `<div style="font-size: 12px;">Tel: ${businessSettings.phone}</div>` : ''}
-            ${businessSettings.email ? `<div style="font-size: 12px;">${businessSettings.email}</div>` : ''}
+            <div style="font-size: ${largeFontSize}; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
+            ${businessSettings.address ? `<div style="font-size: ${smallFontSize};">${businessSettings.address}</div>` : ''}
+            ${businessSettings.phone ? `<div style="font-size: ${smallFontSize};">Tel: ${businessSettings.phone}</div>` : ''}
+            ${businessSettings.email ? `<div style="font-size: ${smallFontSize};">${businessSettings.email}</div>` : ''}
           </div>
           
           <div style="margin-bottom: 8px;">
@@ -236,8 +379,8 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
             ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
             ${invoiceData.customerId ? `
               <div style="background: #e8f5e9; padding: 6px; margin: 6px 0; border-radius: 4px; text-align: center;">
-                <span style="font-size: 12px;">Customer ID: </span>
-                <span style="font-weight: bold; font-size: 14px; font-family: monospace;">${invoiceData.customerId}</span>
+                <span style="font-size: ${smallFontSize};">Customer ID: </span>
+                <span style="font-weight: bold; font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${invoiceData.customerId}</span>
               </div>
             ` : ''}
             ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
@@ -245,7 +388,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           </div>
           
           <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin: 8px 0;">
-            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${itemFontSize};">
               <span style="width: 90px;">Item</span>
               <span style="width: 50px;">SKU</span>
               <span style="width: 30px; text-align: center;">Qty</span>
@@ -256,9 +399,9 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           
           ${invoiceData.items.map(item => `
             <div style="margin-bottom: 4px;">
-              <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; font-size: ${itemFontSize};">
                 <span style="width: 90px;">${item.name}</span>
-                <span style="width: 50px; font-size: 9px; color: #666;">${item.sku || '-'}</span>
+                <span style="width: 50px; font-size: ${smallFontSize}; color: #666;">${item.sku || '-'}</span>
                 <span style="width: 30px; text-align: center;">${item.quantity}</span>
                 <span style="width: 45px; text-align: right;">${item.amount}</span>
                 <span style="width: 55px; text-align: right;">${(item.quantity * item.amount).toFixed(2)}</span>
@@ -283,7 +426,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
                 <span>${currencyCode} ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
-            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize}; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
               <span>${currencyCode} ${invoiceData.grandTotal}</span>
             </div>
@@ -295,14 +438,14 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
               <span style="font-weight: bold;">${currencyCode} ${amountPaidDisplay}</span>
             </div>
             ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
-              <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
+              <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize};">
                 <span>Change:</span>
                 <span>${currencyCode} ${invoiceData.changeAmount}</span>
               </div>
             ` : ''}
           </div>
           
-          <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 12px;">
+          <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: ${smallFontSize};">
             <div>Thank you for shopping!</div>
             <div>Visit again</div>
           </div>

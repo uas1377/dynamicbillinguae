@@ -55,11 +55,11 @@ const RoleSelection = () => {
         const username = code.split('<id>')[1].split('<pass>')[0].trim();
         const password = code.split('<pass>')[1].trim();
 
-        // Validate cashier credentials
+        // Validate cashier credentials (case-insensitive username)
         const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
-        const validCashier = cashiers.find(c => c.username === username && c.password === password);
+        const validCashier = cashiers.find(c => c.username.toLowerCase() === username.toLowerCase() && c.password === password);
 
-        if (validCashier || (username === 'aaa' && password === 'aaa')) {
+        if (validCashier || (username.toLowerCase() === 'aaa' && password === 'aaa')) {
           sessionStorage.setItem('currentUser', JSON.stringify({
             role: 'cashier',
             username: validCashier?.username || 'aaa',
@@ -110,13 +110,15 @@ const RoleSelection = () => {
 
       if (role === 'admin') {
         const adminCreds = JSON.parse(localStorage.getItem('adminCredentials') || '{"username":"aaa","password":"aaa"}');
-        if (username !== adminCreds.username || password !== adminCreds.password) {
+        // Case-insensitive username comparison for admin
+        if (username.toLowerCase() !== adminCreds.username.toLowerCase() || password !== adminCreds.password) {
           toast.error('Invalid admin credentials');
           return;
         }
       } else if (role === 'cashier') {
         const cashiers = JSON.parse(localStorage.getItem('cashiers') || '[{"id":"default","username":"aaa","password":"aaa"}]');
-        const validCashier = cashiers.find(c => c.username === username && c.password === password);
+        // Case-insensitive username comparison for cashier
+        const validCashier = cashiers.find(c => c.username.toLowerCase() === username.toLowerCase() && c.password === password);
 
         if (!validCashier) {
           toast.error('Invalid cashier credentials');
