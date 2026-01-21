@@ -34,13 +34,6 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
     }
   }, []);
 
-  const isPrinterDevice = (device) => {
-    // Check if device name contains printer-related keywords
-    const printerKeywords = ['printer', 'print', 'pos', 'thermal', 'receipt', 'bt-', 'xp-', 'zj-', 'gprinter', 'esc'];
-    const name = (device.name || '').toLowerCase();
-    return printerKeywords.some(keyword => name.includes(keyword));
-  };
-
   const scanForDevices = async () => {
     if (!navigator.bluetooth) {
       toast.error('Bluetooth is not supported in this browser');
@@ -62,7 +55,6 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
         const deviceInfo = {
           id: device.id,
           name: device.name || 'Unknown Device',
-          isPrinter: isPrinterDevice(device),
           device: device
         };
         
@@ -99,8 +91,7 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
       
       const savedInfo = {
         id: device.id,
-        name: device.name || 'Unknown Printer',
-        isPrinter: deviceInfo.isPrinter
+        name: device.name || 'Unknown Device'
       };
       
       setConnectedDevice(savedInfo);
@@ -223,33 +214,18 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
                     {devices.map((device) => (
                       <div 
                         key={device.id}
-                        className={`p-3 rounded-lg border flex items-center justify-between transition-colors ${
-                          device.isPrinter 
-                            ? 'bg-background hover:bg-accent cursor-pointer' 
-                            : 'bg-muted/50 opacity-50'
-                        }`}
-                        onClick={() => device.isPrinter && connectToDevice(device)}
+                        className="p-3 rounded-lg border bg-background hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() => connectToDevice(device)}
                       >
-                        <div className="flex items-center gap-3">
-                          {device.isPrinter ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
                             <Printer className="w-5 h-5 text-primary" />
-                          ) : (
-                            <BluetoothOff className="w-5 h-5 text-muted-foreground" />
-                          )}
-                          <div>
-                            <p className={`font-medium ${!device.isPrinter && 'text-muted-foreground'}`}>
-                              {device.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {device.isPrinter ? 'Printer' : 'Not a printer'}
-                            </p>
+                            <p className="font-medium">{device.name}</p>
                           </div>
-                        </div>
-                        {device.isPrinter && (
                           <Button size="sm" variant="ghost">
                             Connect
                           </Button>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
