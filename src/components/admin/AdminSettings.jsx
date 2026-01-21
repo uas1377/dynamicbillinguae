@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, Save, Building2, Upload, Trash2 } from "lucide-react";
+import { Settings, Save, Building2, Upload, Trash2, Printer } from "lucide-react";
+import { PAPER_SIZES } from "@/utils/paperSizes";
 import { toast } from "sonner";
 import { 
   getBusinessSettings, 
@@ -40,7 +41,8 @@ const AdminSettings = () => {
     email: '',
     logo: '',
     defaultPanel: 'role-selection',
-    currencyCode: 'AED'
+    currencyCode: 'AED',
+    paperSize: '2inch'
   });
 
   const [logoFile, setLogoFile] = useState(null);
@@ -69,7 +71,8 @@ const AdminSettings = () => {
       email: storedBusinessSettings.email || '',
       logo: storedBusinessSettings.logo || '',
       defaultPanel: storedBusinessSettings.defaultPanel || 'role-selection',
-      currencyCode: storedBusinessSettings.currencyCode || 'AED'
+      currencyCode: storedBusinessSettings.currencyCode || 'AED',
+      paperSize: storedBusinessSettings.paperSize || '2inch'
     });
   };
 
@@ -137,7 +140,8 @@ const AdminSettings = () => {
       email: businessSettings.email,
       logo: businessSettings.logo,
       defaultPanel: businessSettings.defaultPanel,
-      currencyCode: businessSettings.currencyCode
+      currencyCode: businessSettings.currencyCode,
+      paperSize: businessSettings.paperSize
     };
 
     saveBusinessSettings(businessData);
@@ -281,6 +285,29 @@ const AdminSettings = () => {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Set which panel opens by default after login
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="paperSize" className="flex items-center gap-2">
+                <Printer className="w-4 h-4" />
+                Thermal Paper Size
+              </Label>
+              <Select 
+                value={businessSettings.paperSize} 
+                onValueChange={(value) => setBusinessSettings({ ...businessSettings, paperSize: value })}
+              >
+                <SelectTrigger id="paperSize">
+                  <SelectValue placeholder="Select paper size" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PAPER_SIZES).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Set the thermal paper width for printing receipts (3mm padding on both sides)
               </p>
             </div>
             

@@ -1,4 +1,5 @@
 import html2canvas from 'html2canvas';
+import { getPaperConfig } from './paperSizes';
 
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
   return new Promise((resolve, reject) => {
@@ -8,6 +9,11 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
       const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+      
+      // Get paper configuration
+      const paperConfig = getPaperConfig();
+      const paperWidth = paperConfig.width;
+      const paddingSide = paperConfig.paddingSide;
       
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       const printDocument = printWindow.document;
@@ -20,11 +26,11 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <style>
             body {
               margin: 0;
-              padding: 3mm;
+              padding: ${paddingSide};
               font-family: Arial, sans-serif;
               font-size: 12px;
               line-height: 1.3;
-              width: 56mm;
+              width: ${paperWidth};
               box-sizing: border-box;
               background: white;
               color: black;
@@ -47,7 +53,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               margin-bottom: 4px;
               font-size: 11px;
             }
-            .item-name { width: 90px; }
+            .item-name { flex: 1; min-width: 0; }
             .item-sku { width: 50px; font-size: 9px; color: #666; }
             .item-qty { width: 25px; text-align: center; }
             .item-rate { width: 45px; text-align: right; }
@@ -66,8 +72,8 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               text-align: center;
             }
             @media print {
-              @page { size: 56mm auto; margin: 0; }
-              body { width: 56mm; padding: 3mm; }
+              @page { size: ${paperWidth} auto; margin: 0; }
+              body { width: ${paperWidth}; padding: ${paddingSide}; }
               .no-print { display: none; }
             }
           </style>
@@ -195,13 +201,18 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
+      // Get paper configuration
+      const paperConfig = getPaperConfig();
+      const paperWidth = paperConfig.width;
+      const paddingSide = paperConfig.paddingSide;
+      
       printContent.innerHTML = `
         <div style="
-          width: 56mm;
+          width: ${paperWidth};
           font-family: Arial, sans-serif;
           font-size: 12px;
           line-height: 1.3;
-          padding: 3mm;
+          padding: ${paddingSide};
           box-sizing: border-box;
           background: white;
           color: black;
