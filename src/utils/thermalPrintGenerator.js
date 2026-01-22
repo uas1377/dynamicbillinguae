@@ -25,9 +25,12 @@ export const getConnectedPrinter = () => {
 };
 
 // Set the active Bluetooth device (called from BluetoothPrinterDialog)
-export const setActiveBluetoothDevice = (device, server) => {
+export const setActiveBluetoothDevice = (device, server, characteristic = null) => {
   activeBluetoothDevice = device;
   activeGattServer = server;
+  if (characteristic && typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = characteristic;
+  }
 };
 
 // Get the active Bluetooth device
@@ -283,6 +286,38 @@ const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') =
 
 // Try to send to Bluetooth printer using stored connection
 const sendToBluetoothPrinter = async (invoiceData, businessName = 'Business Name') => {
+  // First check if characteristic is stored globally (from BluetoothPrinterDialog)
+  if (typeof window !== 'undefined' && window.bluetoothPrinterCharacteristic) {
+    try {
+      const characteristic = window.bluetoothPrinterCharacteristic;
+      console.log('Using stored Bluetooth characteristic');
+      
+      // Generate plain text receipt
+      const receiptText = generatePlainTextReceipt(invoiceData, businessName);
+      const encoder = new TextEncoder();
+      const data = encoder.encode(receiptText);
+      
+      // Send data in chunks
+      const chunkSize = 512;
+      for (let i = 0; i < data.length; i += chunkSize) {
+        const chunk = data.slice(i, i + chunkSize);
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await characteristic.writeValue(chunk);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      console.log('Print sent successfully via Bluetooth');
+      return true;
+    } catch (error) {
+      console.error('Error using stored characteristic, trying fallback:', error);
+      // Fall through to fallback method
+    }
+  }
+  
+  // Fallback: use old method
   const { device, server } = getActiveBluetoothDevice();
   
   if (!device || !server) {
