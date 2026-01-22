@@ -408,8 +408,8 @@ Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currenc
 
             <div className="mt-6 grid grid-cols-3 gap-2 no-print">
               <Button size="sm" className="h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-1 h-3 w-3"/> Print</Button>
-              <Button size="sm" variant="outline" className="h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-1 h-3 w-3"/> Save</Button>
-              <QRCodeButton amount={selectedInvoice.grand_total} size="sm" className="h-8" />
+              <Button size="sm" className="h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-1 h-3 w-3"/> Save</Button>
+              <QRCodeButton amount={selectedInvoice.grand_total} size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90" />
             </div>
           </CardContent>
         </Card>
@@ -570,13 +570,12 @@ Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currenc
                   <div className="grid grid-cols-2 gap-2">
                     <Button 
                       size="sm" 
-                      variant="outline" 
                       className="w-full" 
                       onClick={(e) => { e.stopPropagation(); printMonthlySummary(group); }}
                     >
                       <Printer className="h-3 w-3 mr-1"/> Print
                     </Button>
-                    <QRCodeButton amount={group.paid + group.unpaid} size="sm" className="w-full" />
+                    <QRCodeButton amount={group.paid + group.unpaid} size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
                   </div>
                 </CardContent>
               </Card>
