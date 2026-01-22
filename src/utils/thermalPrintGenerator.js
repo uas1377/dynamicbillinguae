@@ -5,6 +5,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
     try {
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
@@ -19,11 +20,12 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <style>
             body {
               margin: 0;
-              padding: 10px;
+              padding: 3mm;
               font-family: Arial, sans-serif;
-              font-size: 14px;
+              font-size: 12px;
               line-height: 1.3;
-              width: 270px;
+              width: 56mm;
+              box-sizing: border-box;
               background: white;
               color: black;
             }
@@ -64,7 +66,8 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
               text-align: center;
             }
             @media print {
-              body { width: 280px; }
+              @page { size: 56mm auto; margin: 0; }
+              body { width: 56mm; padding: 3mm; }
               .no-print { display: none; }
             }
           </style>
@@ -120,35 +123,35 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
           <div class="dashed-line">
             <div class="flex">
               <span>Subtotal:</span>
-              <span>AED ${invoiceData.subTotal}</span>
+              <span>${currencyCode} ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div class="flex">
                 <span>Discount:</span>
-                <span>-AED ${invoiceData.discountAmount}</span>
+                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div class="flex">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>AED ${invoiceData.taxAmount}</span>
+                <span>${currencyCode} ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>AED ${invoiceData.grandTotal}</span>
+              <span>${currencyCode} ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
           <div class="change-box">
             <div class="flex">
               <span>Amount Paid:</span>
-              <span class="bold">AED ${amountPaidDisplay}</span>
+              <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
             </div>
             ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div class="flex bold large">
                 <span>Change:</span>
-                <span>AED ${invoiceData.changeAmount}</span>
+                <span>${currencyCode} ${invoiceData.changeAmount}</span>
               </div>
             ` : ''}
           </div>
@@ -188,16 +191,18 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
+      const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
       
       printContent.innerHTML = `
         <div style="
-          width: 280px;
+          width: 56mm;
           font-family: Arial, sans-serif;
-          font-size: 14px;
+          font-size: 12px;
           line-height: 1.3;
-          padding: 10px;
+          padding: 3mm;
+          box-sizing: border-box;
           background: white;
           color: black;
         ">
@@ -253,35 +258,35 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           <div style="border-top: 1px dashed #000; padding-top: 4px; margin-top: 8px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Subtotal:</span>
-              <span>AED ${invoiceData.subTotal}</span>
+              <span>${currencyCode} ${invoiceData.subTotal}</span>
             </div>
             ${invoiceData.discountAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Discount:</span>
-                <span>-AED ${invoiceData.discountAmount}</span>
+                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
               </div>
             ` : ''}
             ${invoiceData.taxAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>AED ${invoiceData.taxAmount}</span>
+                <span>${currencyCode} ${invoiceData.taxAmount}</span>
               </div>
             ` : ''}
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>AED ${invoiceData.grandTotal}</span>
+              <span>${currencyCode} ${invoiceData.grandTotal}</span>
             </div>
           </div>
           
           <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Amount Paid:</span>
-              <span style="font-weight: bold;">AED ${amountPaidDisplay}</span>
+              <span style="font-weight: bold;">${currencyCode} ${amountPaidDisplay}</span>
             </div>
             ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
               <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px;">
                 <span>Change:</span>
-                <span>AED ${invoiceData.changeAmount}</span>
+                <span>${currencyCode} ${invoiceData.changeAmount}</span>
               </div>
             ` : ''}
           </div>
