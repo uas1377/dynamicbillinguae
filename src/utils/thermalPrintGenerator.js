@@ -1,12 +1,16 @@
 import html2canvas from 'html2canvas';
 import { getPaperConfig } from './paperSizes';
 import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from './bluetoothPrintService';
-// Add this import - it's referenced in the new code
-import { printHistoricalReceipt } from './receiptService';
 
 // Store the active Bluetooth connection
 let activeBluetoothDevice = null;
 let activeGattServer = null;
+
+// Check if a Bluetooth printer is connected
+export const isBluetoothPrinterConnected_Legacy = () => {
+  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  return !!savedDevice;
+};
 
 // Get connected Bluetooth printer info
 export const getConnectedPrinter = () => {
@@ -44,7 +48,7 @@ export const clearActiveBluetoothDevice = () => {
   }
 };
 
-// Generate receipt HTML content for printing (UNCHANGED)
+// Generate receipt HTML content for printing (UNCHANGED - original version)
 const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   const businessSettings = invoiceData.yourCompany || {};
   const actualBusinessName = businessSettings.name || businessName;
@@ -223,33 +227,24 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   `;
 };
 
-/**
- * MAIN ROUTER FUNCTION
- * Decides whether to use Bluetooth or Browser Print
- */
+// Main print function with Bluetooth support
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
-  // 1. Check Bluetooth connection using the shared function
-  if (isBluetoothPrinterConnected()) {
-    try {
-      console.log("Routing to Bluetooth Service...");
-      return await sendToBluetoothPrinter(invoiceData);
-    } catch (error) {
-      console.error("Bluetooth print failed, falling back to Browser Print:", error);
-      // continue to fallback
-    }
-  }
-  
-  // 2. Fallback: Browser Print
-  console.log("No Bluetooth found or failed. Routing to Browser Print...");
-  
-  // Prefer printHistoricalReceipt if it exists (more domain-specific formatting)
-  if (typeof printHistoricalReceipt === 'function') {
-    return printHistoricalReceipt(invoiceData);
-  }
-  
-  // Otherwise fall back to classic browser print window
   return new Promise(async (resolve, reject) => {
     try {
+      // Try Bluetooth printing first if available
+      if (isBluetoothPrinterConnected()) {
+        try {
+          await sendToBluetoothPrinter(invoiceData);
+          console.log('Printed via Bluetooth');
+          resolve();
+          return;
+        } catch (btError) {
+          console.error('Bluetooth print failed, falling back to system print:', btError.message);
+          // Fall through to system print dialog
+        }
+      }
+      
+      // Fallback: Generate HTML and use system print (UNCHANGED - original code)
       const htmlContent = generateReceiptHTML(invoiceData, businessName);
       
       const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -270,7 +265,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
   });
 };
 
-// Save as image function (UNCHANGED)
+// Save as image function (UNCHANGED - original version)
 export const saveAsImage = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
