@@ -5,56 +5,46 @@ import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from "./bluetooth
 export const printHistoricalReceipt = async (invoice) => {
   const settings = getBusinessSettings();
   const flats = getStoredFlats();
-  const currencyCode = settings.currencyCode || 'AED';
-  
-  // Check if Bluetooth printer is connected
+  const currencyCode = settings.currencyCode || 'SR'; // Changed default to SR as per your print
+
+  // Detect monthly summary (no invoice_number field or empty)
+  const isMonthly = !invoice.invoice_number || invoice.invoice_number === '' || invoice.invoice_number === null;
+
+  const flatInfo = flats.find(f => f.id === invoice.flat_id);
+
+  // Bluetooth printing
   if (isBluetoothPrinterConnected()) {
     try {
-      // Format invoice data for Bluetooth printer
       const bluetoothData = {
         invoiceNumber: invoice.invoice_number,
         invoice_number: invoice.invoice_number,
-        customerName: invoice.customer_name,
-        customer_name: invoice.customer_name,
-        customerPhone: invoice.customer_phone,
-        customer_phone: invoice.customer_phone,
-        customerId: flats.find(f => f.id === invoice.flat_id)?.user_id,
-        customer_id: flats.find(f => f.id === invoice.flat_id)?.user_id,
-        cashierName: invoice.cashier_name,
-        cashier_name: invoice.cashier_name,
-        items: invoice.items,
-        subTotal: invoice.sub_total,
-        sub_total: invoice.sub_total,
-        taxRate: invoice.tax_rate,
-        tax_rate: invoice.tax_rate,
-        taxAmount: invoice.tax_amount,
-        tax_amount: invoice.tax_amount,
-        discountAmount: invoice.discount_amount || 0,
-        discount_amount: invoice.discount_amount || 0,
-        grandTotal: invoice.grand_total,
-        grand_total: invoice.grand_total,
-        amountReceived: invoice.amount_received,
-        amount_received: invoice.amount_received,
-        changeAmount: invoice.change_amount,
-        change_amount: invoice.change_amount,
+        customerName: invoice.customer_name || invoice.customerName,
+        customer_name: invoice.customer_name || invoice.customerName,
+        customerPhone: invoice.customer_phone || invoice.customerPhone,
+        customer_phone: invoice.customer_phone || invoice.customerPhone,
+        customerId: invoice.customer_id || invoice.customerId || flatInfo?.user_id,
+        customer_id: invoice.customer_id || invoice.customerId || flatInfo?.user_id,
+        cashierName: invoice.cashier_name || invoice.cashierName,
+        cashier_name: invoice.cashier_name || invoice.cashierName,
+        items: invoice.items || [],
+        subTotal: invoice.sub_total || invoice.subTotal || 0,
+        sub_total: invoice.sub_total || invoice.subTotal || 0,
+        grandTotal: invoice.grand_total || invoice.grandTotal || 0,
+        grand_total: invoice.grand_total || invoice.grandTotal || 0,
         status: invoice.status,
-        yourCompany: settings
+        yourCompany: settings,
+        isMonthlySummary: isMonthly
       };
-      
+
       await sendToBluetoothPrinter(bluetoothData);
-      console.log('Historical receipt printed via Bluetooth');
+      console.log('Receipt printed via Bluetooth');
       return;
     } catch (error) {
-      console.error('Bluetooth print failed, falling back to browser print:', error);
-      // Fall through to browser print
+      console.error('Bluetooth print failed, falling back to browser:', error);
     }
   }
-  
-  // Fallback to browser print dialog
-  // Check if this is a "Monthly" summary or a "Single" invoice
-  const isMonthly = !invoice.invoice_number;
-  const flatInfo = flats.find(f => f.id === invoice.flat_id);
-  
+
+  // Browser print fallback
   const html = `
     <html>
       <head>
@@ -63,53 +53,55 @@ export const printHistoricalReceipt = async (invoice) => {
           body { 
             font-family: 'Courier New', monospace; 
             width: 58mm; 
-            padding: 2mm; 
+            padding: 2mm 3mm; 
             font-size: 11px; 
+            line-height: 1.3;
             box-sizing: border-box;
+            color: #000;
           }
           .center { text-align: center; }
           .bold { font-weight: bold; }
-          .border-top { border-top: 1px dashed #000; margin: 5px 0; padding-top: 5px; }
+          .border-top { border-top: 1px dashed #000; margin: 6px 0; padding-top: 6px; }
           .flex { display: flex; justify-content: space-between; }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 5px; 
-          }
+          table { width: 100%; border-collapse: collapse; margin: 6px 0; }
           th { 
             border-bottom: 1px solid #000; 
             text-align: left; 
-            font-size: 10px; 
-            padding: 4px 0;
+            font-size: 9px; 
+            padding: 3px 0; 
             text-transform: uppercase;
           }
-          td { 
-            padding: 4px 0; 
-            font-size: 10px; 
-            vertical-align: top;
-          }
+          td { padding: 3px 0; font-size: 10px; vertical-align: top; }
+          .amount { text-align: right; }
+          .status-paid { color: green; font-weight: bold; }
+          .status-unpaid { color: red; font-weight: bold; }
         </style>
       </head>
       <body>
         <div class="center">
-          ${settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
-          <div class="bold" style="font-size: 14px;">${settings.name || 'BUSINESS NAME'}</div>
-          <div style="font-size: 10px;">${settings.address || ''}</div>
-          <div style="font-size: 10px;">Tel: ${settings.phone || ''}</div>
+          ${settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width:70px;height:auto;margin-bottom:4px;" />` : ''}
+          <div class="bold" style="font-size:14px;">${settings.name || 'GALAXY'}</div>
+          <div style="font-size:10px;">${settings.address || 'shop 34, rassaz'}</div>
+          <div style="font-size:10px;">Tel: ${settings.phone || '8291952317'}</div>
+          <div style="font-size:9px;">${settings.email || 'ansaronline1377@gmail.com'}</div>
         </div>
 
         <div class="border-top">
-          ${isMonthly ? '' : `<div class="flex"><span>Invoice No:</span> <span class="bold">${invoice.invoice_number}</span></div>`}
-          ${isMonthly ? '' : `<div class="flex"><span>Date:</span> <span>${new Date(invoice.created_at || new Date()).toLocaleString()}</span></div>`}
+          ${!isMonthly ? `
+            <div class="flex"><span>Invoice No:</span><span class="bold">${invoice.invoice_number || '—'}</span></div>
+            <div class="flex"><span>Date:</span><span>${new Date(invoice.created_at || Date.now()).toLocaleDateString('en-GB')}</span></div>
+            <div class="flex"><span>Time:</span><span>${new Date(invoice.created_at || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>
+          ` : ''}
           
-          ${isMonthly ? '' : `
-            <div class="flex"><span>Cashier:</span> <span>${invoice.cashier_name || 'Admin'}</span></div>
+          <div class="flex"><span>Customer:</span><span class="bold">${invoice.customer_name || invoice.customerName || 'N/A'}</span></div>
+          <div class="flex"><span>Customer ID:</span><span class="bold">${invoice.customer_id || invoice.customerId || flatInfo?.user_id || 'N/A'}</span></div>
+          
+          ${!isMonthly ? `
+            <div class="flex"><span>Cashier:</span><span>${invoice.cashier_name || invoice.cashierName || 'Admin'}</span></div>
             ${invoice.status === 'paid' ? `
-              <div class="flex"><span>Received By:</span> <span class="bold">${invoice.paid_by_cashier || invoice.cashier_name || 'Admin'}</span></div>
+              <div class="flex"><span>Received By:</span><span class="bold">${invoice.paid_by_cashier || '—'}</span></div>
             ` : ''}
-          `}
-          <div class="flex"><span>Flat:</span> <span class="bold">${invoice.customer_name || 'N/A'}</span></div>
-          <div class="flex"><span>Customer ID:</span> <span class="bold">${flatInfo?.user_id || 'N/A'}</span></div>
+          ` : ''}
         </div>
 
         <table>
@@ -119,55 +111,77 @@ export const printHistoricalReceipt = async (invoice) => {
               ${isMonthly ? '<th style="text-align:left">Date</th>' : ''}
               <th style="text-align:center">${isMonthly ? 'Status' : 'Qty'}</th>
               ${!isMonthly ? '<th style="text-align:center">Rate</th>' : ''}
-              <th style="text-align:right">Amount</th>
+              <th class="amount">Amount</th>
             </tr>
           </thead>
           <tbody>
-            ${invoice.items.map(item => {
+            ${invoice.items?.map(item => {
               if (isMonthly) {
-                // Monthly summary format
                 return `
                   <tr>
-                    <td>${item.invoice_number || '-'}</td>
-                    <td>${item.date || '-'}</td>
-                    <td style="text-align:center">${item.status || '-'}</td>
-                    <td style="text-align:right">${Number(item.amount || 0).toFixed(2)}</td>
+                    <td>${item.invoice_number || item.name || '—'}</td>
+                    <td>${item.date || '—'}</td>
+                    <td class="center ${item.status?.toLowerCase() === 'paid' ? 'status-paid' : 'status-unpaid'}">
+                      ${item.status || '—'}
+                    </td>
+                    <td class="amount">${Number(item.amount || 0).toFixed(2)}</td>
                   </tr>
                 `;
               } else {
-                // Single invoice format
                 return `
                   <tr>
-                    <td>${item.name}<br/><span style="font-size:8px; color:#555;">${item.sku || '-'}</span></td>
-                    <td style="text-align:center">${item.quantity}</td>
-                    <td style="text-align:center">${Number(item.amount).toFixed(2)}</td>
-                    <td style="text-align:right">${(item.amount * item.quantity).toFixed(2)}</td>
+                    <td>${item.name}<br><span style="font-size:9px;color:#555;">${item.sku || '—'}</span></td>
+                    <td class="center">${item.quantity || 1}</td>
+                    <td class="center">${Number(item.amount || 0).toFixed(2)}</td>
+                    <td class="amount">${(item.quantity * item.amount || 0).toFixed(2)}</td>
                   </tr>
                 `;
               }
-            }).join('')}
+            }).join('') || '<tr><td colspan="4" class="center">No items</td></tr>'}
           </tbody>
         </table>
 
         <div class="border-top">
-          <div class="flex bold" style="font-size: 13px;">
+          <div class="flex bold" style="font-size:13px;">
             <span>GRAND TOTAL:</span>
-            <span>${currencyCode} ${Number(invoice.grand_total).toFixed(2)}</span>
+            <span>${currencyCode} ${Number(invoice.grand_total || invoice.grandTotal || 0).toFixed(2)}</span>
           </div>
         </div>
 
-        <div class="center border-top" style="margin-top: 10px; font-size: 9px;">
-          <div>${settings.footerNote || 'Thank you!'}</div>
+        <!-- Amount Paid / Change - ONLY for non-monthly -->
+        ${!isMonthly && invoice.status === 'paid' ? `
+          <div class="border-top mt-2">
+            <div class="flex">
+              <span>Amount Paid:</span>
+              <span>${currencyCode} ${Number(invoice.amount_received || 0).toFixed(2)}</span>
+            </div>
+            ${Number(invoice.change_amount || 0) > 0 ? `
+              <div class="flex">
+                <span>Change:</span>
+                <span>${currencyCode} ${Number(invoice.change_amount).toFixed(2)}</span>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        <div class="center border-top" style="margin-top:12px; font-size:9px;">
+          <div>${settings.footerNote || 'Thank you for shopping!'}</div>
+          <div>Visit again</div>
         </div>
 
         <script>
-          window.onload = () => { window.print(); window.close(); };
+          window.onload = () => {
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 300);
+          };
         </script>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank', 'width=350,height=600');
+  const printWindow = window.open('', '_blank', 'width=380,height=650');
   printWindow.document.write(html);
   printWindow.document.close();
 };
