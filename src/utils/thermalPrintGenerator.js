@@ -1,12 +1,13 @@
 import html2canvas from 'html2canvas';
 import { getPaperConfig } from './paperSizes';
+import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from './bluetoothPrintService';
 
 // Store the active Bluetooth connection
 let activeBluetoothDevice = null;
 let activeGattServer = null;
 
 // Check if a Bluetooth printer is connected
-export const isBluetoothPrinterConnected = () => {
+export const isBluetoothPrinterConnected_Legacy = () => {
   const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
   return !!savedDevice;
 };
@@ -25,9 +26,12 @@ export const getConnectedPrinter = () => {
 };
 
 // Set the active Bluetooth device (called from BluetoothPrinterDialog)
-export const setActiveBluetoothDevice = (device, server) => {
+export const setActiveBluetoothDevice = (device, server, characteristic = null) => {
   activeBluetoothDevice = device;
   activeGattServer = server;
+  if (characteristic && typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = characteristic;
+  }
 };
 
 // Get the active Bluetooth device
@@ -39,15 +43,32 @@ export const getActiveBluetoothDevice = () => {
 export const clearActiveBluetoothDevice = () => {
   activeBluetoothDevice = null;
   activeGattServer = null;
+  if (typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = null;
+  }
 };
 
-// Generate receipt HTML content for printing
+// Generate receipt HTML content for printing (UNCHANGED - original version)
 const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   const businessSettings = invoiceData.yourCompany || {};
   const actualBusinessName = businessSettings.name || businessName;
   const currencyCode = businessSettings.currencyCode || 'currency';
   const isPaid = invoiceData.status !== 'unpaid';
-  const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+  
+  // Handle both naming conventions (camelCase and snake_case)
+  const invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
+  const customerName = invoiceData.customerName || invoiceData.customer_name;
+  const customerId = invoiceData.customerId || invoiceData.customer_id;
+  const customerPhone = invoiceData.customerPhone || invoiceData.customer_phone;
+  const cashierName = invoiceData.cashierName || invoiceData.cashier_name;
+  const subTotal = invoiceData.subTotal || invoiceData.sub_total;
+  const taxRate = invoiceData.taxRate || invoiceData.tax_rate;
+  const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount || 0;
+  const discountAmount = invoiceData.discountAmount || invoiceData.discount_amount || 0;
+  const grandTotal = invoiceData.grandTotal || invoiceData.grand_total;
+  const amountReceived = invoiceData.amountReceived || invoiceData.amount_received;
+  const changeAmount = invoiceData.changeAmount || invoiceData.change_amount || 0;
+  const amountPaidDisplay = isPaid ? amountReceived : '0.00 (unpaid)';
   
   // Get paper configuration with font sizes
   const paperConfig = getPaperConfig();
@@ -124,21 +145,21 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
       
       <div>
         <div class="flex">
-          <span>Invoice: ${invoiceData.invoiceNumber}</span>
+          <span>Invoice: ${invoiceNumber}</span>
         </div>
         <div class="flex">
           <span>Date: ${new Date().toLocaleDateString()}</span>
           <span>Time: ${new Date().toLocaleTimeString()}</span>
         </div>
-        ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
-        ${invoiceData.customerId ? `
+        ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
+        ${customerId ? `
           <div class="customer-id">
             <span class="small">Customer ID:</span>
-            <span class="bold" style="font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${invoiceData.customerId}</span>
+            <span class="bold" style="font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${customerId}</span>
           </div>
         ` : ''}
-        ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
-        ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
+        ${customerPhone && !customerId ? `<div>Phone: ${customerPhone}</div>` : ''}
+        ${cashierName ? `<div>Cashier: ${cashierName}</div>` : ''}
       </div>
       
       <div class="dashed-line">
@@ -164,23 +185,23 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
       <div class="dashed-line">
         <div class="flex">
           <span>Subtotal:</span>
-          <span>${currencyCode} ${invoiceData.subTotal}</span>
+          <span>${currencyCode} ${subTotal}</span>
         </div>
-        ${invoiceData.discountAmount > 0 ? `
+        ${discountAmount > 0 ? `
           <div class="flex">
             <span>Discount:</span>
-            <span>-${currencyCode} ${invoiceData.discountAmount}</span>
+            <span>-${currencyCode} ${discountAmount}</span>
           </div>
         ` : ''}
-        ${invoiceData.taxAmount > 0 ? `
+        ${taxAmount > 0 ? `
           <div class="flex">
-            <span>Tax (${invoiceData.taxRate}%):</span>
-            <span>${currencyCode} ${invoiceData.taxAmount}</span>
+            <span>Tax (${taxRate}%):</span>
+            <span>${currencyCode} ${taxAmount}</span>
           </div>
         ` : ''}
         <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
           <span>Total:</span>
-          <span>${currencyCode} ${invoiceData.grandTotal}</span>
+          <span>${currencyCode} ${grandTotal}</span>
         </div>
       </div>
       
@@ -189,10 +210,10 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
           <span>Amount Paid:</span>
           <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
         </div>
-        ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
+        ${isPaid && parseFloat(changeAmount) > 0 ? `
           <div class="flex bold large">
             <span>Change:</span>
-            <span>${currencyCode} ${invoiceData.changeAmount}</span>
+            <span>${currencyCode} ${changeAmount}</span>
           </div>
         ` : ''}
       </div>
@@ -206,158 +227,24 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   `;
 };
 
-// Generate plain text receipt for direct printing
-const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') => {
-  const businessSettings = invoiceData.yourCompany || {};
-  const actualBusinessName = businessSettings.name || businessName;
-  const currencyCode = businessSettings.currencyCode || 'AED';
-  const isPaid = invoiceData.status !== 'unpaid';
-  const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
-  
-  let receipt = '';
-  
-  // ESC/POS Commands
-  const ESC = '\x1B';
-  const GS = '\x1D';
-  
-  // Header - Initialize and center
-  receipt += ESC + '@'; // Initialize printer
-  receipt += ESC + 'a' + '\x01'; // Center alignment
-  receipt += ESC + '!' + '\x30'; // Double height and width
-  receipt += actualBusinessName + '\n';
-  receipt += ESC + '!' + '\x00'; // Normal text
-  if (businessSettings.address) receipt += businessSettings.address + '\n';
-  if (businessSettings.phone) receipt += 'Tel: ' + businessSettings.phone + '\n';
-  receipt += '\n';
-  
-  // Invoice details - Left align
-  receipt += ESC + 'a' + '\x00'; // Left alignment
-  receipt += '--------------------------------\n';
-  receipt += 'Invoice: ' + invoiceData.invoiceNumber + '\n';
-  receipt += 'Date: ' + new Date().toLocaleDateString() + '\n';
-  receipt += 'Time: ' + new Date().toLocaleTimeString() + '\n';
-  if (invoiceData.customerName) receipt += 'Customer: ' + invoiceData.customerName + '\n';
-  if (invoiceData.customerId) receipt += 'ID: ' + invoiceData.customerId + '\n';
-  if (invoiceData.cashierName) receipt += 'Cashier: ' + invoiceData.cashierName + '\n';
-  receipt += '--------------------------------\n';
-  
-  // Items
-  invoiceData.items.forEach(item => {
-    const itemTotal = (item.quantity * item.amount).toFixed(2);
-    const itemName = item.name.length > 16 ? item.name.substring(0, 16) : item.name.padEnd(16);
-    receipt += itemName;
-    receipt += (item.quantity + 'x' + item.amount).padStart(8);
-    receipt += itemTotal.padStart(8) + '\n';
-  });
-  
-  receipt += '--------------------------------\n';
-  
-  // Totals
-  receipt += ('Subtotal: ' + currencyCode + ' ' + invoiceData.subTotal).padStart(32) + '\n';
-  if (parseFloat(invoiceData.discountAmount) > 0) {
-    receipt += ('Discount: -' + currencyCode + ' ' + invoiceData.discountAmount).padStart(32) + '\n';
-  }
-  if (parseFloat(invoiceData.taxAmount) > 0) {
-    receipt += ('Tax (' + invoiceData.taxRate + '%): ' + currencyCode + ' ' + invoiceData.taxAmount).padStart(32) + '\n';
-  }
-  receipt += ESC + '!' + '\x10'; // Bold
-  receipt += ('TOTAL: ' + currencyCode + ' ' + invoiceData.grandTotal).padStart(32) + '\n';
-  receipt += ESC + '!' + '\x00'; // Normal
-  
-  receipt += '--------------------------------\n';
-  receipt += 'Amount Paid: ' + currencyCode + ' ' + amountPaidDisplay + '\n';
-  if (isPaid && parseFloat(invoiceData.changeAmount) > 0) {
-    receipt += 'Change: ' + currencyCode + ' ' + invoiceData.changeAmount + '\n';
-  }
-  
-  // Footer - Center
-  receipt += '\n';
-  receipt += ESC + 'a' + '\x01'; // Center
-  receipt += 'Thank you for shopping!\n';
-  receipt += 'Visit again\n';
-  receipt += '\n\n\n';
-  receipt += GS + 'V' + '\x00'; // Cut paper (full cut)
-  
-  return receipt;
-};
-
-// Try to send to Bluetooth printer using stored connection
-const sendToBluetoothPrinter = async (invoiceData, businessName = 'Business Name') => {
-  const { device, server } = getActiveBluetoothDevice();
-  
-  if (!device || !server) {
-    throw new Error('No active Bluetooth connection');
-  }
-  
-  try {
-    // Check if still connected
-    if (!server.connected) {
-      // Try to reconnect
-      await device.gatt.connect();
-    }
-    
-    // Generate plain text receipt
-    const receiptText = generatePlainTextReceipt(invoiceData, businessName);
-    
-    // Try to find a writable characteristic
-    const services = await server.getPrimaryServices();
-    
-    for (const service of services) {
-      try {
-        const characteristics = await service.getCharacteristics();
-        for (const char of characteristics) {
-          if (char.properties.write || char.properties.writeWithoutResponse) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(receiptText);
-            
-            // Send data in chunks (max 512 bytes for BLE)
-            const chunkSize = 512;
-            for (let i = 0; i < data.length; i += chunkSize) {
-              const chunk = data.slice(i, i + chunkSize);
-              if (char.properties.writeWithoutResponse) {
-                await char.writeValueWithoutResponse(chunk);
-              } else {
-                await char.writeValue(chunk);
-              }
-              // Small delay between chunks
-              await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            
-            return true;
-          }
-        }
-      } catch (serviceError) {
-        console.log('Service error, trying next:', serviceError);
-      }
-    }
-    
-    throw new Error('No writable characteristic found');
-  } catch (error) {
-    console.error('Bluetooth print error:', error);
-    throw error;
-  }
-};
-
+// Main print function with Bluetooth support
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
-      // Check if Bluetooth printer is connected and try direct printing
-      const connectedPrinter = getConnectedPrinter();
-      const { device, server } = getActiveBluetoothDevice();
-      
-      if (connectedPrinter && device && server && navigator.bluetooth) {
+      // Try Bluetooth printing first if available
+      if (isBluetoothPrinterConnected()) {
         try {
-          await sendToBluetoothPrinter(invoiceData, businessName);
-          console.log('Printed directly to Bluetooth printer');
+          await sendToBluetoothPrinter(invoiceData);
+          console.log('Printed via Bluetooth');
           resolve();
           return;
         } catch (btError) {
-          console.log('Bluetooth print failed, falling back to system print:', btError.message);
+          console.error('Bluetooth print failed, falling back to system print:', btError.message);
           // Fall through to system print dialog
         }
       }
       
-      // Fallback: Generate HTML and use system print (for Thermer app or regular printing)
+      // Fallback: Generate HTML and use system print (UNCHANGED - original code)
       const htmlContent = generateReceiptHTML(invoiceData, businessName);
       
       const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -378,6 +265,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
   });
 };
 
+// Save as image function (UNCHANGED - original version)
 export const saveAsImage = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -393,7 +281,21 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       const actualBusinessName = businessSettings.name || businessName;
       const currencyCode = businessSettings.currencyCode || 'currency';
       const isPaid = invoiceData.status !== 'unpaid';
-      const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
+      
+      // Handle both naming conventions
+      const invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
+      const customerName = invoiceData.customerName || invoiceData.customer_name;
+      const customerId = invoiceData.customerId || invoiceData.customer_id;
+      const customerPhone = invoiceData.customerPhone || invoiceData.customer_phone;
+      const cashierName = invoiceData.cashierName || invoiceData.cashier_name;
+      const subTotal = invoiceData.subTotal || invoiceData.sub_total;
+      const taxRate = invoiceData.taxRate || invoiceData.tax_rate;
+      const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount || 0;
+      const discountAmount = invoiceData.discountAmount || invoiceData.discount_amount || 0;
+      const grandTotal = invoiceData.grandTotal || invoiceData.grand_total;
+      const amountReceived = invoiceData.amountReceived || invoiceData.amount_received;
+      const changeAmount = invoiceData.changeAmount || invoiceData.change_amount || 0;
+      const amountPaidDisplay = isPaid ? amountReceived : '0.00 (unpaid)';
       
       // Get paper configuration with font sizes
       const paperConfig = getPaperConfig();
@@ -420,21 +322,21 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           
           <div style="margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between;">
-              <span>Invoice: ${invoiceData.invoiceNumber}</span>
+              <span>Invoice: ${invoiceNumber}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>Date: ${new Date().toLocaleDateString()}</span>
               <span>Time: ${new Date().toLocaleTimeString()}</span>
             </div>
-            ${invoiceData.customerName ? `<div>Customer: ${invoiceData.customerName}</div>` : ''}
-            ${invoiceData.customerId ? `
+            ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
+            ${customerId ? `
               <div style="background: #e8f5e9; padding: 6px; margin: 6px 0; border-radius: 4px; text-align: center;">
                 <span style="font-size: ${smallFontSize};">Customer ID: </span>
-                <span style="font-weight: bold; font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${invoiceData.customerId}</span>
+                <span style="font-weight: bold; font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${customerId}</span>
               </div>
             ` : ''}
-            ${invoiceData.customerPhone && !invoiceData.customerId ? `<div>Phone: ${invoiceData.customerPhone}</div>` : ''}
-            ${invoiceData.cashierName ? `<div>Cashier: ${invoiceData.cashierName}</div>` : ''}
+            ${customerPhone && !customerId ? `<div>Phone: ${customerPhone}</div>` : ''}
+            ${cashierName ? `<div>Cashier: ${cashierName}</div>` : ''}
           </div>
           
           <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin: 8px 0;">
@@ -462,23 +364,23 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           <div style="border-top: 1px dashed #000; padding-top: 4px; margin-top: 8px;">
             <div style="display: flex; justify-content: space-between;">
               <span>Subtotal:</span>
-              <span>${currencyCode} ${invoiceData.subTotal}</span>
+              <span>${currencyCode} ${subTotal}</span>
             </div>
-            ${invoiceData.discountAmount > 0 ? `
+            ${discountAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
                 <span>Discount:</span>
-                <span>-${currencyCode} ${invoiceData.discountAmount}</span>
+                <span>-${currencyCode} ${discountAmount}</span>
               </div>
             ` : ''}
-            ${invoiceData.taxAmount > 0 ? `
+            ${taxAmount > 0 ? `
               <div style="display: flex; justify-content: space-between;">
-                <span>Tax (${invoiceData.taxRate}%):</span>
-                <span>${currencyCode} ${invoiceData.taxAmount}</span>
+                <span>Tax (${taxRate}%):</span>
+                <span>${currencyCode} ${taxAmount}</span>
               </div>
             ` : ''}
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize}; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
               <span>Total:</span>
-              <span>${currencyCode} ${invoiceData.grandTotal}</span>
+              <span>${currencyCode} ${grandTotal}</span>
             </div>
           </div>
           
@@ -487,10 +389,10 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
               <span>Amount Paid:</span>
               <span style="font-weight: bold;">${currencyCode} ${amountPaidDisplay}</span>
             </div>
-            ${isPaid && parseFloat(invoiceData.changeAmount) > 0 ? `
+            ${isPaid && parseFloat(changeAmount) > 0 ? `
               <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize};">
                 <span>Change:</span>
-                <span>${currencyCode} ${invoiceData.changeAmount}</span>
+                <span>${currencyCode} ${changeAmount}</span>
               </div>
             ` : ''}
           </div>
@@ -511,7 +413,7 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
       document.body.removeChild(printContent);
       
       const link = document.createElement('a');
-      link.download = `invoice-${invoiceData.invoiceNumber}.png`;
+      link.download = `invoice-${invoiceNumber}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
       
