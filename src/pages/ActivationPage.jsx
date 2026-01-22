@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { getDeviceId, activateApp, isActivated } from '@/utils/activation';
-import { Shield, Key, Copy, Check } from 'lucide-react';
+import { Shield, Key, Copy, Check, Clock } from 'lucide-react';
 
 const ActivationPage = ({ onActivated }) => {
   const [activationKey, setActivationKey] = useState('');
@@ -42,7 +42,14 @@ const ActivationPage = ({ onActivated }) => {
     try {
       const success = await activateApp(activationKey.trim());
       if (success) {
-        toast.success('App activated successfully!');
+        // Check if it's a trial activation
+        if (activationKey.trim().toLowerCase() === 'dynamictrail') {
+          toast.success('Trial version activated for 24 hours!', {
+            description: 'All data will be cleared after trial expires.'
+          });
+        } else {
+          toast.success('App activated successfully!');
+        }
         onActivated();
       } else {
         toast.error('Invalid activation key. Please check and try again.');
@@ -142,6 +149,20 @@ const ActivationPage = ({ onActivated }) => {
               </>
             )}
           </Button>
+
+          {/* Trial Info */}
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Clock className="w-4 h-4 text-amber-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-600">Try Before You Buy</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Type <span className="font-mono font-bold">dynamictrail</span> to start a 24-hour trial.
+                  All data will be cleared when trial expires.
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div className="pt-4 border-t border-slate-00 text-center">
             <p className="text-[15px] text-slate-500 mb-1">
