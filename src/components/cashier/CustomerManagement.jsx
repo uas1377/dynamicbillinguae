@@ -11,9 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { 
   Building2, Home, Plus, Edit, Trash2, Search, 
   FileText, ChevronDown, ChevronRight, ArrowLeft, 
-  Printer, Image as ImageIcon, Calendar, CheckCircle2, User, QrCode
+  Printer, Image as ImageIcon, Calendar, CheckCircle2, User 
 } from "lucide-react";
-import QRCodeButton from "@/components/ui/QRCodeButton";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -180,11 +179,201 @@ const CustomerManagement = () => {
     });
     
     // Refresh flat invoices from storage
-    const freshInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
-    setFlatInvoices(freshInvoices);
+    const allUpdatedInvoices = getStoredInvoices().filter(inv => inv.flat_id === selectedFlat.id);
+    setFlatInvoices(allUpdatedInvoices);
     
-    toast.success(`All invoices marked as ${targetStatus}`);
+    // Recalculate the current month group with fresh data
+    const updatedMonthInvoices = allUpdatedInvoices.filter(inv => {
+      const invDate = new Date(inv.created_at || inv.date);
+      return `${invDate.getFullYear()}-${invDate.getMonth()}` === group.key;
+    });
+    
+    const updatedGroup = {
+      ...group,
+      invoices: updatedMonthInvoices,
+      paid: updatedMonthInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.grand_total, 0),
+      unpaid: updatedMonthInvoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + i.grand_total, 0)
+    };
+    
+    setSelectedMonth(updatedGroup);
+    
+    toast.success(`All invoices in ${group.label} marked as ${targetStatus}`);
     setConfirmDialog({ open: false, title: '', description: '', onConfirm: null });
+  };
+  
+  // Print monthly summary
+  const printMonthlySummary = (group) => {
+    const flatInfo = selectedFlat;
+    const buildingInfo = buildings.find(b => b.id === flatInfo?.building_id);
+    
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printDocument = printWindow.document;
+    
+    printDocument.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Monthly Invoice Summary</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            margin: 0;
+            padding: 3mm;
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.2;
+            width: 56mm;
+            background: white;
+            color: black;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .large { font-size: 14px; }
+          .small { font-size: 9px; }
+          .dashed-line { 
+            border-bottom: 1px dashed #000; 
+            margin: 6px 0; 
+          }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          th, td { padding: 2px 1px; text-align: left; }
+          th { border-bottom: 1px solid #000; }
+          .text-right { text-align: right; }
+          .paid { color: green; }
+          .unpaid { color: red; }
+          @media print {
+            @page { size: 56mm auto; margin: 0; }
+            body { width: 56mm; padding: 3mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center dashed-line">
+          ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
+          <div class="large bold">${businessSettings.name || 'Monthly Summary'}</div>
+          ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
+          ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
+        </div>
+        
+        <div style="margin: 8px 0; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+          <div><strong>Month:</strong> ${group.label}</div>
+          <div><strong>Customer ID:</strong> ${flatInfo?.user_id || 'N/A'}</div>
+          <div><strong>Building:</strong> ${buildingInfo?.name || 'N/A'}</div>
+          <div><strong>Flat:</strong> ${flatInfo?.flat_number || 'N/A'}</div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Date</th>
+              <th class="text-right">Amount</th>
+              <th class="text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${group.invoices.map(inv => `
+              <tr>
+                <td>${inv.invoice_number}</td>
+                <td>${new Date(inv.created_at || inv.date).toLocaleDateString()}</td>
+                <td class="text-right">${formatCurrency(inv.grand_total, businessSettings.currencyCode || 'currency')}</td>
+                <td class="text-right ${inv.status === 'paid' ? 'paid' : 'unpaid'}">${inv.status?.toUpperCase()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="dashed-line" style="margin-top: 12px; padding-top: 8px;">
+          <div style="display: flex; justify-content: space-between;"><span>Total Paid:</span><span class="paid bold">${formatCurrency(group.paid, businessSettings.currencyCode || 'currency')}</span></div>
+          <div style="display: flex; justify-content: space-between;"><span>Total Unpaid:</span><span class="unpaid bold">${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 16px; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;"><span class="bold">Grand Total:</span><span class="bold">${formatCurrency(group.paid + group.unpaid, businessSettings.currencyCode || 'currency')}</span></div>
+        </div>
+        
+        <div class="center small" style="margin-top: 12px;">
+          <div>Printed on: ${new Date().toLocaleString()}</div>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printDocument.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+  
+  // Handle save image for detail view
+  const handleSaveDetailImage = async () => {
+    if (!selectedInvoice) return;
+    
+    const flatInfo = allFlats.find(f => f.id === selectedInvoice.flat_id);
+    const buildingInfo = buildings.find(b => b.id === selectedInvoice.building_id);
+    
+    const invoiceData = {
+      invoiceNumber: selectedInvoice.invoice_number,
+      customerName: selectedInvoice.customer_name || flatInfo?.flat_number || '',
+      customerId: flatInfo?.user_id || '',
+      customerPhone: selectedInvoice.customer_phone || '',
+      items: selectedInvoice.items || [],
+      subTotal: parseFloat(selectedInvoice.sub_total || 0).toFixed(2),
+      discountAmount: parseFloat(selectedInvoice.discount_amount || 0).toFixed(2),
+      taxRate: selectedInvoice.tax_rate || 0,
+      taxAmount: parseFloat(selectedInvoice.tax_amount || 0).toFixed(2),
+      grandTotal: parseFloat(selectedInvoice.grand_total || 0).toFixed(2),
+      amountReceived: selectedInvoice.status === 'paid' ? parseFloat(selectedInvoice.amount_received || selectedInvoice.grand_total || 0).toFixed(2) : '0.00',
+      changeAmount: parseFloat(selectedInvoice.change_amount || 0).toFixed(2),
+      cashierName: selectedInvoice.cashier_name || '',
+      status: selectedInvoice.status,
+      yourCompany: businessSettings,
+      buildingName: buildingInfo?.name || '',
+      flatNumber: flatInfo?.flat_number || ''
+    };
+    
+    try {
+      await saveAsImage(invoiceData);
+      toast.success('Invoice saved as image');
+    } catch (error) {
+      toast.error('Failed to save invoice as image');
+    }
+  };
+
+  const handleEditBuilding = (b) => {
+    setEditingBuilding(b);
+    setBuildingName(b.name);
+    setShowBuildingDialog(true);
+  };
+
+  const saveBuilding = () => {
+    if (!buildingName.trim()) return;
+    if (editingBuilding) {
+      updateBuildingInStorage(editingBuilding.id, buildingName);
+      toast.success("Building updated");
+    } else {
+      addBuildingToStorage(buildingName);
+      toast.success("Building added");
+    }
+    loadData();
+    setShowBuildingDialog(false);
+  };
+
+  const handleEditFlat = (f) => {
+    setEditingFlat(f);
+    setFlatNumber(f.flat_number);
+    setActiveBuildingId(f.building_id);
+    setShowFlatDialog(true);
+  };
+
+  const saveFlat = () => {
+    if (!flatNumber.trim()) return;
+    if (editingFlat) {
+      updateFlatInStorage(editingFlat.id, { flat_number: flatNumber });
+      toast.success("Flat updated");
+    } else {
+      addFlatToStorage(activeBuildingId, flatNumber);
+      toast.success("Flat added");
+    }
+    loadData();
+    setShowFlatDialog(false);
   };
 
   const enterFlatView = (flat) => {
@@ -195,133 +384,17 @@ const CustomerManagement = () => {
   };
 
   const getMonthlyGroups = () => {
-    const grouped = {};
+    const groups = {};
     flatInvoices.forEach(inv => {
       const date = new Date(inv.created_at || inv.date);
       const key = `${date.getFullYear()}-${date.getMonth()}`;
-      if (!grouped[key]) {
-        grouped[key] = {
-          key,
-          label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-          invoices: [],
-          paid: 0,
-          unpaid: 0
-        };
-      }
-      grouped[key].invoices.push(inv);
-      if (inv.status === 'paid') {
-        grouped[key].paid += inv.grand_total;
-      } else {
-        grouped[key].unpaid += inv.grand_total;
-      }
+      const label = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+      if (!groups[key]) groups[key] = { label, paid: 0, unpaid: 0, invoices: [], key };
+      if (inv.status === 'paid') groups[key].paid += inv.grand_total;
+      else groups[key].unpaid += inv.grand_total;
+      groups[key].invoices.push(inv);
     });
-    return Object.values(grouped).sort((a, b) => b.key.localeCompare(a.key));
-  };
-
-  const printMonthlySummary = async (group) => {
-    const flatInfo = selectedFlat;
-    const buildingInfo = buildings.find(b => b.id === flatInfo?.building_id);
-    
-    const summaryData = {
-      invoice_number: `MONTHLY-${group.key}`,
-      created_at: new Date().toISOString(),
-      customer_name: `Flat ${flatInfo?.flat_number}`,
-      customer_phone: flatInfo?.user_id || '',
-      building_name: buildingInfo?.name || '',
-      flat_number: flatInfo?.flat_number || '',
-      items: group.invoices.map(inv => ({
-        name: `Invoice ${inv.invoice_number}`,
-        sku: new Date(inv.created_at).toLocaleDateString(),
-        quantity: 1,
-        amount: inv.grand_total
-      })),
-      sub_total: group.paid + group.unpaid,
-      tax_rate: 0,
-      tax_amount: 0,
-      grand_total: group.paid + group.unpaid,
-      amount_received: group.paid,
-      change_amount: 0,
-      status: group.unpaid > 0 ? 'unpaid' : 'paid',
-      cashier_name: getCurrentCashier(),
-      notes: `Monthly Summary for ${group.label}
-Total Invoices: ${group.invoices.length}
-Paid: ${formatCurrency(group.paid, businessSettings.currencyCode || 'currency')}
-Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}`
-    };
-
-    try {
-      await generateThermalPrint(summaryData, businessSettings);
-      toast.success('Monthly summary sent to printer');
-    } catch (error) {
-      toast.error('Print failed: ' + error.message);
-    }
-  };
-
-  const handleSaveDetailImage = async () => {
-    try {
-      await saveAsImage(selectedInvoice, businessSettings);
-      toast.success('Invoice saved as image');
-    } catch (error) {
-      toast.error('Save failed: ' + error.message);
-    }
-  };
-
-  const handleEditBuilding = (building) => {
-    setEditingBuilding(building);
-    setBuildingName(building.name);
-    setShowBuildingDialog(true);
-  };
-
-  const saveBuilding = () => {
-    if (!buildingName.trim()) {
-      toast.error('Building name is required');
-      return;
-    }
-    
-    if (editingBuilding) {
-      updateBuildingInStorage(editingBuilding.id, { name: buildingName.trim() });
-      toast.success('Building updated');
-    } else {
-      addBuildingToStorage(buildingName.trim());
-      toast.success('Building added');
-    }
-    
-    loadData();
-    setShowBuildingDialog(false);
-    setBuildingName('');
-    setEditingBuilding(null);
-  };
-
-  const handleEditFlat = (flat) => {
-    setEditingFlat(flat);
-    setFlatNumber(flat.flat_number);
-    setActiveBuildingId(flat.building_id);
-    setShowFlatDialog(true);
-  };
-
-  const saveFlat = () => {
-    if (!flatNumber.trim()) {
-      toast.error('Flat number is required');
-      return;
-    }
-    
-    if (editingFlat) {
-      updateFlatInStorage(editingFlat.id, { flat_number: flatNumber.trim() });
-      toast.success('Flat updated');
-    } else {
-      if (!activeBuildingId) {
-        toast.error('Please select a building');
-        return;
-      }
-      addFlatToStorage(activeBuildingId, flatNumber.trim());
-      toast.success('Flat added');
-    }
-    
-    loadData();
-    setShowFlatDialog(false);
-    setFlatNumber('');
-    setEditingFlat(null);
-    setActiveBuildingId(null);
+    return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
   };
 
   // Render content based on view mode
@@ -406,10 +479,9 @@ Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currenc
               )}
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-2 no-print">
-              <Button size="sm" className="h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-1 h-3 w-3"/> Print</Button>
-              <Button size="sm" className="h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-1 h-3 w-3"/> Save</Button>
-              <QRCodeButton amount={selectedInvoice.grand_total} size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90" />
+            <div className="mt-6 flex gap-2 no-print">
+              <Button size="sm" className="flex-1 h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-2 h-3 w-3"/> Thermal Print</Button>
+              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-2 h-3 w-3"/> Save Image</Button>
             </div>
           </CardContent>
         </Card>
@@ -567,16 +639,14 @@ Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currenc
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      size="sm" 
-                      className="w-full" 
-                      onClick={(e) => { e.stopPropagation(); printMonthlySummary(group); }}
-                    >
-                      <Printer className="h-3 w-3 mr-1"/> Print
-                    </Button>
-                    <QRCodeButton amount={group.paid + group.unpaid} size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
-                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="w-full mt-2" 
+                    onClick={(e) => { e.stopPropagation(); printMonthlySummary(group); }}
+                  >
+                    <Printer className="h-3 w-3 mr-2"/> Print Month Summary
+                  </Button>
                 </CardContent>
               </Card>
             );
