@@ -1,139 +1,425 @@
-import { getBusinessSettings } from "./localStorageData";
-import { getStoredFlats } from "./buildingFlatStorage";
-import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from "./bluetoothPrintService";
+import html2canvas from 'html2canvas';
+import { getPaperConfig } from './paperSizes';
+import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from './bluetoothPrintService';
 
-export const printHistoricalReceipt = async (invoice) => {
-  const settings = getBusinessSettings();
-  const flats = getStoredFlats();
-  
-  // Check if Bluetooth printer is connected
-  if (isBluetoothPrinterConnected()) {
+// Store the active Bluetooth connection
+let activeBluetoothDevice = null;
+let activeGattServer = null;
+
+// Check if a Bluetooth printer is connected
+export const isBluetoothPrinterConnected_Legacy = () => {
+  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  return !!savedDevice;
+};
+
+// Get connected Bluetooth printer info
+export const getConnectedPrinter = () => {
+  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  if (savedDevice) {
     try {
-      // Format invoice data for Bluetooth printer
-      const bluetoothData = {
-        invoiceNumber: invoice.invoice_number,
-        invoice_number: invoice.invoice_number,
-        customerName: invoice.customer_name,
-        customer_name: invoice.customer_name,
-        customerPhone: invoice.customer_phone,
-        customer_phone: invoice.customer_phone,
-        customerId: flats.find(f => f.id === invoice.flat_id)?.user_id,
-        customer_id: flats.find(f => f.id === invoice.flat_id)?.user_id,
-        cashierName: invoice.cashier_name,
-        cashier_name: invoice.cashier_name,
-        items: invoice.items,
-        subTotal: invoice.sub_total,
-        sub_total: invoice.sub_total,
-        taxRate: invoice.tax_rate,
-        tax_rate: invoice.tax_rate,
-        taxAmount: invoice.tax_amount,
-        tax_amount: invoice.tax_amount,
-        discountAmount: invoice.discount_amount || 0,
-        discount_amount: invoice.discount_amount || 0,
-        grandTotal: invoice.grand_total,
-        grand_total: invoice.grand_total,
-        amountReceived: invoice.amount_received,
-        amount_received: invoice.amount_received,
-        changeAmount: invoice.change_amount,
-        change_amount: invoice.change_amount,
-        status: invoice.status,
-        yourCompany: settings
-      };
-      
-      await sendToBluetoothPrinter(bluetoothData);
-      console.log('Historical receipt printed via Bluetooth');
-      return;
-    } catch (error) {
-      console.error('Bluetooth print failed, falling back to browser print:', error);
-      // Fall through to browser print
+      return JSON.parse(savedDevice);
+    } catch (e) {
+      return null;
     }
   }
-  
-  // Fallback to browser print dialog (original code unchanged)
-  const currencyCode = settings.currencyCode || 'currency';
-  const flatInfo = flats.find(f => f.id === invoice.flat_id);
+  return null;
+};
 
-  const printWindow = window.open('', '_blank', 'width=350,height=600');
+// Set the active Bluetooth device (called from BluetoothPrinterDialog)
+export const setActiveBluetoothDevice = (device, server, characteristic = null) => {
+  activeBluetoothDevice = device;
+  activeGattServer = server;
+  if (characteristic && typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = characteristic;
+  }
+};
+
+// Get the active Bluetooth device
+export const getActiveBluetoothDevice = () => {
+  return { device: activeBluetoothDevice, server: activeGattServer };
+};
+
+// Clear active connection
+export const clearActiveBluetoothDevice = () => {
+  activeBluetoothDevice = null;
+  activeGattServer = null;
+  if (typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = null;
+  }
+};
+
+// Generate receipt HTML content for printing (UNCHANGED - original version)
+const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
+  const businessSettings = invoiceData.yourCompany || {};
+  const actualBusinessName = businessSettings.name || businessName;
+  const currencyCode = businessSettings.currencyCode || 'currency';
+  const isPaid = invoiceData.status !== 'unpaid';
   
-  const html = `
+  // Handle both naming conventions (camelCase and snake_case)
+  const invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
+  const customerName = invoiceData.customerName || invoiceData.customer_name;
+  const customerId = invoiceData.customerId || invoiceData.customer_id;
+  const customerPhone = invoiceData.customerPhone || invoiceData.customer_phone;
+  const cashierName = invoiceData.cashierName || invoiceData.cashier_name;
+  const subTotal = invoiceData.subTotal || invoiceData.sub_total;
+  const taxRate = invoiceData.taxRate || invoiceData.tax_rate;
+  const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount || 0;
+  const discountAmount = invoiceData.discountAmount || invoiceData.discount_amount || 0;
+  const grandTotal = invoiceData.grandTotal || invoiceData.grand_total;
+  const amountReceived = invoiceData.amountReceived || invoiceData.amount_received;
+  const changeAmount = invoiceData.changeAmount || invoiceData.change_amount || 0;
+  const amountPaidDisplay = isPaid ? amountReceived : '0.00 (unpaid)';
+  
+  // Get paper configuration with font sizes
+  const paperConfig = getPaperConfig();
+  const { width: paperWidth, paddingSide, baseFontSize, largeFontSize, smallFontSize, itemFontSize } = paperConfig;
+  
+  return `
+    <!DOCTYPE html>
     <html>
-      <head>
-        <style>
-          @page { size: 56mm auto; margin: 0; }
-          body { 
-            font-family: Arial, sans-serif; 
-            width: 56mm; padding: 3mm; box-sizing: border-box; font-size: 10px; line-height: 1.3;
-          }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .border-top { border-top: 1px dashed #000; margin-top: 8px; padding-top: 8px; }
-          .flex { display: flex; justify-content: space-between; }
-          .items-table { width: 100%; margin: 10px 0; border-collapse: collapse; font-size: 10px; }
-          .items-table th { border-bottom: 1px solid #000; padding: 4px 0; text-transform: uppercase; }
-          .items-table td { padding: 4px 0; vertical-align: top; }
-        </style>
-      </head>
-      <body>
-        <div class="center">
-           ${settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
-
-          <div class="bold" style="font-size: 16px;">${settings.name || 'BUSINESS NAME'}</div>
-          <div>${settings.address || ''}</div>
-          <div>Tel: ${settings.phone || ''}</div>
+    <head>
+      <title>Thermal Receipt</title>
+      <style>
+        body {
+          margin: 0;
+          padding: ${paddingSide};
+          font-family: Arial, sans-serif;
+          font-size: ${baseFontSize};
+          line-height: 1.3;
+          width: ${paperWidth};
+          box-sizing: border-box;
+          background: white;
+          color: black;
+        }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .large { font-size: ${largeFontSize}; }
+        .small { font-size: ${smallFontSize}; }
+        .dashed-line { 
+          border-bottom: 1px dashed #000; 
+          margin: 8px 0; 
+        }
+        .flex { 
+          display: flex; 
+          justify-content: space-between; 
+        }
+        .item-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px;
+          font-size: ${itemFontSize};
+        }
+        .item-name { flex: 1; min-width: 0; }
+        .item-sku { width: 50px; font-size: ${smallFontSize}; color: #666; }
+        .item-qty { width: 25px; text-align: center; }
+        .item-rate { width: 45px; text-align: right; }
+        .item-amount { width: 50px; text-align: right; }
+        .change-box {
+          background: #f0f0f0;
+          padding: 8px;
+          margin: 8px 0;
+          border-radius: 4px;
+        }
+        .customer-id {
+          background: #e8f5e9;
+          padding: 6px;
+          margin: 6px 0;
+          border-radius: 4px;
+          text-align: center;
+        }
+        @media print {
+          @page { size: ${paperWidth} auto; margin: 0; }
+          body { width: ${paperWidth}; padding: ${paddingSide}; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="center dashed-line">
+        ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px;" />` : ''}
+        <div class="large bold">${actualBusinessName}</div>
+        ${businessSettings.address ? `<div class="small">${businessSettings.address}</div>` : ''}
+        ${businessSettings.phone ? `<div class="small">Tel: ${businessSettings.phone}</div>` : ''}
+        ${businessSettings.email ? `<div class="small">${businessSettings.email}</div>` : ''}
+      </div>
+      
+      <div>
+        <div class="flex">
+          <span>Invoice: ${invoiceNumber}</span>
         </div>
-
-        <div class="border-top">
-          <div class="flex"><span>Invoice No:</span> <span class="bold">${invoice.invoice_number}</span></div>
-          <div class="flex"><span>Date:</span> <span>${new Date(invoice.created_at).toLocaleString()}</span></div>
-          
-          <div class="flex"><span>Cashier:</span> <span>${invoice.cashier_name || 'Admin'}</span></div>
-          ${invoice.status === 'paid' ? `
-            <div class="flex"><span>Received By:</span> <span class="bold">${invoice.paid_by_cashier || invoice.cashier_name || 'Admin'}</span></div>
-          ` : ''}
-          
-          <div class="flex"><span>Flat:</span> <span class="bold">${invoice.customer_name || 'N/A'}</span></div>
-          <div class="flex"><span>Customer ID:</span> <span class="bold">${flatInfo?.user_id || 'N/A'}</span></div>
+        <div class="flex">
+          <span>Date: ${new Date().toLocaleDateString()}</span>
+          <span>Time: ${new Date().toLocaleTimeString()}</span>
         </div>
-
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th style="text-align:left">Item / SKU</th>
-              <th style="text-align:center">Qty</th>
-              <th style="text-align:center">Rate</th>
-              <th style="text-align:right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${invoice.items.map(item => `
-              <tr>
-                <td>${item.name}<br/><span style="font-size:8px; color:#555;">${item.sku || '-'}</span></td>
-                <td style="text-align:center">${item.quantity}</td>
-                <td style="text-align:center">${Number(item.amount).toFixed(2)}</td>
-                <td style="text-align:right">${(item.amount * item.quantity).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <div class="border-top">
-          <div class="flex bold" style="font-size: 13px;">
-            <span>GRAND TOTAL:</span>
-            <span>${currencyCode} ${invoice.grand_total.toFixed(2)}</span>
+        ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
+        ${customerId ? `
+          <div class="customer-id">
+            <span class="small">Customer ID:</span>
+            <span class="bold" style="font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${customerId}</span>
           </div>
+        ` : ''}
+        ${customerPhone && !customerId ? `<div>Phone: ${customerPhone}</div>` : ''}
+        ${cashierName ? `<div>Cashier: ${cashierName}</div>` : ''}
+      </div>
+      
+      <div class="dashed-line">
+        <div class="item-row bold">
+          <span class="item-name">Item</span>
+          <span class="item-sku">SKU</span>
+          <span class="item-qty">Qty</span>
+          <span class="item-rate">Rate</span>
+          <span class="item-amount">Amount</span>
         </div>
-
-        <div class="center border-top" style="margin-top: 15px; font-size: 10px;">
-          <div>${settings.footerNote || 'Thank you!'}</div>
+      </div>
+      
+      ${invoiceData.items.map(item => `
+        <div class="item-row">
+          <span class="item-name">${item.name}</span>
+          <span class="item-sku">${item.sku || '-'}</span>
+          <span class="item-qty">${item.quantity}</span>
+          <span class="item-rate">${item.amount}</span>
+          <span class="item-amount">${(item.quantity * item.amount).toFixed(2)}</span>
         </div>
-
-        <script>
-          window.onload = () => { window.print(); window.close(); };
-        </script>
-      </body>
+      `).join('')}
+      
+      <div class="dashed-line">
+        <div class="flex">
+          <span>Subtotal:</span>
+          <span>${currencyCode} ${subTotal}</span>
+        </div>
+        ${discountAmount > 0 ? `
+          <div class="flex">
+            <span>Discount:</span>
+            <span>-${currencyCode} ${discountAmount}</span>
+          </div>
+        ` : ''}
+        ${taxAmount > 0 ? `
+          <div class="flex">
+            <span>Tax (${taxRate}%):</span>
+            <span>${currencyCode} ${taxAmount}</span>
+          </div>
+        ` : ''}
+        <div class="flex bold large" style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
+          <span>Total:</span>
+          <span>${currencyCode} ${grandTotal}</span>
+        </div>
+      </div>
+      
+      <div class="change-box">
+        <div class="flex">
+          <span>Amount Paid:</span>
+          <span class="bold">${currencyCode} ${amountPaidDisplay}</span>
+        </div>
+        ${isPaid && parseFloat(changeAmount) > 0 ? `
+          <div class="flex bold large">
+            <span>Change:</span>
+            <span>${currencyCode} ${changeAmount}</span>
+          </div>
+        ` : ''}
+      </div>
+      
+      <div class="center small" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
+        <div>Thank you for shopping!</div>
+        <div>Visit again</div>
+      </div>
+    </body>
     </html>
   `;
+};
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+// Main print function with Bluetooth support
+export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Try Bluetooth printing first if available
+      if (isBluetoothPrinterConnected()) {
+        try {
+          await sendToBluetoothPrinter(invoiceData);
+          console.log('Printed via Bluetooth');
+          resolve();
+          return;
+        } catch (btError) {
+          console.error('Bluetooth print failed, falling back to system print:', btError.message);
+          // Fall through to system print dialog
+        }
+      }
+      
+      // Fallback: Generate HTML and use system print (UNCHANGED - original code)
+      const htmlContent = generateReceiptHTML(invoiceData, businessName);
+      
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      const printDocument = printWindow.document;
+      
+      printDocument.write(htmlContent);
+      printDocument.close();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+        resolve();
+      }, 500);
+      
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// Save as image function (UNCHANGED - original version)
+export const saveAsImage = async (invoiceData, businessName = 'Business Name') => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const printContent = document.createElement('div');
+      printContent.style.position = 'absolute';
+      printContent.style.left = '-9999px';
+      printContent.style.top = '0';
+      printContent.style.backgroundColor = 'white';
+      printContent.style.padding = '10px';
+      document.body.appendChild(printContent);
+      
+      const businessSettings = invoiceData.yourCompany || {};
+      const actualBusinessName = businessSettings.name || businessName;
+      const currencyCode = businessSettings.currencyCode || 'currency';
+      const isPaid = invoiceData.status !== 'unpaid';
+      
+      // Handle both naming conventions
+      const invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
+      const customerName = invoiceData.customerName || invoiceData.customer_name;
+      const customerId = invoiceData.customerId || invoiceData.customer_id;
+      const customerPhone = invoiceData.customerPhone || invoiceData.customer_phone;
+      const cashierName = invoiceData.cashierName || invoiceData.cashier_name;
+      const subTotal = invoiceData.subTotal || invoiceData.sub_total;
+      const taxRate = invoiceData.taxRate || invoiceData.tax_rate;
+      const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount || 0;
+      const discountAmount = invoiceData.discountAmount || invoiceData.discount_amount || 0;
+      const grandTotal = invoiceData.grandTotal || invoiceData.grand_total;
+      const amountReceived = invoiceData.amountReceived || invoiceData.amount_received;
+      const changeAmount = invoiceData.changeAmount || invoiceData.change_amount || 0;
+      const amountPaidDisplay = isPaid ? amountReceived : '0.00 (unpaid)';
+      
+      // Get paper configuration with font sizes
+      const paperConfig = getPaperConfig();
+      const { width: paperWidth, paddingSide, baseFontSize, largeFontSize, smallFontSize, itemFontSize } = paperConfig;
+      
+      printContent.innerHTML = `
+        <div style="
+          width: ${paperWidth};
+          font-family: Arial, sans-serif;
+          font-size: ${baseFontSize};
+          line-height: 1.3;
+          padding: ${paddingSide};
+          box-sizing: border-box;
+          background: white;
+          color: black;
+        ">
+          <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
+            ${businessSettings.logo ? `<img src="${businessSettings.logo}" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto 8px; display: block;" />` : ''}
+            <div style="font-size: ${largeFontSize}; font-weight: bold; margin-bottom: 4px;">${actualBusinessName}</div>
+            ${businessSettings.address ? `<div style="font-size: ${smallFontSize};">${businessSettings.address}</div>` : ''}
+            ${businessSettings.phone ? `<div style="font-size: ${smallFontSize};">Tel: ${businessSettings.phone}</div>` : ''}
+            ${businessSettings.email ? `<div style="font-size: ${smallFontSize};">${businessSettings.email}</div>` : ''}
+          </div>
+          
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Invoice: ${invoiceNumber}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Date: ${new Date().toLocaleDateString()}</span>
+              <span>Time: ${new Date().toLocaleTimeString()}</span>
+            </div>
+            ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
+            ${customerId ? `
+              <div style="background: #e8f5e9; padding: 6px; margin: 6px 0; border-radius: 4px; text-align: center;">
+                <span style="font-size: ${smallFontSize};">Customer ID: </span>
+                <span style="font-weight: bold; font-size: calc(${baseFontSize} + 2px); font-family: monospace;">${customerId}</span>
+              </div>
+            ` : ''}
+            ${customerPhone && !customerId ? `<div>Phone: ${customerPhone}</div>` : ''}
+            ${cashierName ? `<div>Cashier: ${cashierName}</div>` : ''}
+          </div>
+          
+          <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin: 8px 0;">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${itemFontSize};">
+              <span style="width: 90px;">Item</span>
+              <span style="width: 50px;">SKU</span>
+              <span style="width: 30px; text-align: center;">Qty</span>
+              <span style="width: 45px; text-align: right;">Rate</span>
+              <span style="width: 55px; text-align: right;">Amount</span>
+            </div>
+          </div>
+          
+          ${invoiceData.items.map(item => `
+            <div style="margin-bottom: 4px;">
+              <div style="display: flex; justify-content: space-between; font-size: ${itemFontSize};">
+                <span style="width: 90px;">${item.name}</span>
+                <span style="width: 50px; font-size: ${smallFontSize}; color: #666;">${item.sku || '-'}</span>
+                <span style="width: 30px; text-align: center;">${item.quantity}</span>
+                <span style="width: 45px; text-align: right;">${item.amount}</span>
+                <span style="width: 55px; text-align: right;">${(item.quantity * item.amount).toFixed(2)}</span>
+              </div>
+            </div>
+          `).join('')}
+          
+          <div style="border-top: 1px dashed #000; padding-top: 4px; margin-top: 8px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Subtotal:</span>
+              <span>${currencyCode} ${subTotal}</span>
+            </div>
+            ${discountAmount > 0 ? `
+              <div style="display: flex; justify-content: space-between;">
+                <span>Discount:</span>
+                <span>-${currencyCode} ${discountAmount}</span>
+              </div>
+            ` : ''}
+            ${taxAmount > 0 ? `
+              <div style="display: flex; justify-content: space-between;">
+                <span>Tax (${taxRate}%):</span>
+                <span>${currencyCode} ${taxAmount}</span>
+              </div>
+            ` : ''}
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize}; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px;">
+              <span>Total:</span>
+              <span>${currencyCode} ${grandTotal}</span>
+            </div>
+          </div>
+          
+          <div style="background: #f0f0f0; padding: 8px; margin: 8px 0; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Amount Paid:</span>
+              <span style="font-weight: bold;">${currencyCode} ${amountPaidDisplay}</span>
+            </div>
+            ${isPaid && parseFloat(changeAmount) > 0 ? `
+              <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: ${largeFontSize};">
+                <span>Change:</span>
+                <span>${currencyCode} ${changeAmount}</span>
+              </div>
+            ` : ''}
+          </div>
+          
+          <div style="text-align: center; font-size: ${smallFontSize}; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
+            <div>Thank you for shopping!</div>
+            <div>Visit again</div>
+          </div>
+        </div>
+      `;
+      
+      const canvas = await html2canvas(printContent, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      
+      document.body.removeChild(printContent);
+      
+      const link = document.createElement('a');
+      link.download = `invoice-${invoiceNumber}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      
+      resolve();
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
