@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, Filter, Search, Printer, Download, Clock, User, UserCheck, Building2, Home } from "lucide-react";
+import { FileText, Filter, Search, Printer, Download, Clock, User, UserCheck, Building2, Home, QrCode } from "lucide-react";
+import QRCodeButton from "@/components/ui/QRCodeButton";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -497,6 +498,8 @@ const AllInvoices = () => {
                             <Download className="w-3 h-3" />
                             Save
                           </Button>
+
+                          <QRCodeButton amount={invoice.grand_total} size="sm" />
                           
                           <div className="flex items-center gap-2">
                             <Label htmlFor={`status-${invoice.id}`} className="text-sm">

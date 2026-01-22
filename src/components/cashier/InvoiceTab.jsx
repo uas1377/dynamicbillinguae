@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Minus, ShoppingCart, FileText, Printer, Image, ArrowRight, Building2, Home } from "lucide-react";
+import { Plus, Minus, ShoppingCart, FileText, Printer, Image, ArrowRight, Building2, Home, QrCode } from "lucide-react";
+import QRCodeButton from "@/components/ui/QRCodeButton";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { generateThermalPrint, saveAsImage } from "@/utils/thermalPrintGenerator";
@@ -702,7 +703,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
             </div>
 
             {/* Actions */}
-            <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="grid grid-cols-3 gap-2 pt-2">
               <Button onClick={printInvoice} variant="outline" className="flex items-center justify-center gap-1 h-10">
                 <Printer className="w-4 h-4" />
                 <span className="hidden sm:inline">Print</span>
@@ -711,7 +712,7 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 <Image className="w-4 h-4" />
                 <span className="hidden sm:inline">Image</span>
               </Button>
-            </div>
+              <QRCodeButton amount={calculateTotal()} className="h-10 w-full" />
             <div className="grid grid-cols-2 gap-2">
               <Button onClick={saveInvoice} className="gradient-primary text-white border-0 h-10">
                 Save

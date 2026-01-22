@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, Save, Building2, Upload, Trash2, Printer } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Settings, Save, Building2, Upload, Trash2, Printer, QrCode } from "lucide-react";
 import { PAPER_SIZES } from "@/utils/paperSizes";
 import { toast } from "sonner";
 import { 
@@ -42,7 +43,9 @@ const AdminSettings = () => {
     logo: '',
     defaultPanel: 'role-selection',
     currencyCode: 'AED',
-    paperSize: '2inch'
+    paperSize: '2inch',
+    upiLink: '',
+    upiLinkEnabled: false
   });
 
   const [logoFile, setLogoFile] = useState(null);
@@ -72,7 +75,9 @@ const AdminSettings = () => {
       logo: storedBusinessSettings.logo || '',
       defaultPanel: storedBusinessSettings.defaultPanel || 'role-selection',
       currencyCode: storedBusinessSettings.currencyCode || 'AED',
-      paperSize: storedBusinessSettings.paperSize || '2inch'
+      paperSize: storedBusinessSettings.paperSize || '2inch',
+      upiLink: storedBusinessSettings.upiLink || '',
+      upiLinkEnabled: storedBusinessSettings.upiLinkEnabled || false
     });
   };
 
@@ -141,7 +146,9 @@ const AdminSettings = () => {
       logo: businessSettings.logo,
       defaultPanel: businessSettings.defaultPanel,
       currencyCode: businessSettings.currencyCode,
-      paperSize: businessSettings.paperSize
+      paperSize: businessSettings.paperSize,
+      upiLink: businessSettings.upiLink,
+      upiLinkEnabled: businessSettings.upiLinkEnabled
     };
 
     saveBusinessSettings(businessData);
@@ -308,6 +315,35 @@ const AdminSettings = () => {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Set the thermal paper width for printing receipts (3mm padding on both sides)
+              </p>
+            </div>
+
+            {/* UPI Link Settings */}
+            <div className="space-y-2 pt-4 border-t">
+              <Label htmlFor="upiLink" className="flex items-center gap-2">
+                <QrCode className="w-4 h-4" />
+                UPI/Payment QR Link
+              </Label>
+              <div className="flex items-center gap-3 mb-2">
+                <Switch
+                  id="upiLinkEnabled"
+                  checked={businessSettings.upiLinkEnabled}
+                  onCheckedChange={(checked) => setBusinessSettings({ ...businessSettings, upiLinkEnabled: checked })}
+                />
+                <Label htmlFor="upiLinkEnabled" className="text-sm">
+                  {businessSettings.upiLinkEnabled ? 'QR Button Enabled' : 'QR Button Disabled'}
+                </Label>
+              </div>
+              <Input
+                id="upiLink"
+                placeholder="e.g., upi://pay?pa=example@upi&am=[amount]"
+                value={businessSettings.upiLink}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, upiLink: e.target.value })}
+                disabled={!businessSettings.upiLinkEnabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Use <span className="font-mono font-bold">[amount]</span> as placeholder for invoice total. 
+                This will be replaced with actual amount when generating QR.
               </p>
             </div>
             

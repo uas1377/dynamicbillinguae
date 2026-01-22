@@ -8,6 +8,7 @@ import ProductManagement from "@/components/admin/ProductManagement";
 import CashierManagement from "@/components/admin/CashierManagement";
 import AdminSettings from "@/components/admin/AdminSettings";
 import ProfitDashboard from "@/components/admin/ProfitDashboard";
+import TrialBadge from "@/components/ui/TrialBadge";
 
 const AdminPanel = () => {
   const navigate = useNavigate();
@@ -35,10 +36,13 @@ const AdminPanel = () => {
         <Card className="gradient-card shadow-soft border-0 mb-6">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-3xl font-bold text-primary flex items-center gap-3">
-                <Shield className="w-8 h-8" />
-                Admin Panel
-              </CardTitle>
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-3xl font-bold text-primary flex items-center gap-3">
+                  <Shield className="w-8 h-8" />
+                  Admin Panel
+                </CardTitle>
+                <TrialBadge />
+              </div>
               <p className="text-muted-foreground mt-2">System Administration Dashboard</p>
             </div>
             <Button onClick={handleLogout} variant="outline" className="flex items-center gap-2">

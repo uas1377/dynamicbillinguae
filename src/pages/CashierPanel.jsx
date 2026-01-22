@@ -9,6 +9,7 @@ import CustomerManagement from "@/components/cashier/CustomerManagement";
 import CreateInvoiceTabs from "@/components/cashier/CreateInvoiceTabs";
 import AllInvoices from "@/components/cashier/AllInvoices";
 import BluetoothPrinterDialog from "@/components/cashier/BluetoothPrinterDialog";
+import TrialBadge from "@/components/ui/TrialBadge";
 
 const CashierPanel = () => {
   const navigate = useNavigate();
@@ -91,7 +92,10 @@ const CashierPanel = () => {
         <Card className="gradient-card shadow-soft border-0 mb-6">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-3xl font-bold text-primary">Cashier Panel</CardTitle>
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-3xl font-bold text-primary">Cashier Panel</CardTitle>
+                <TrialBadge />
+              </div>
               <p className="text-muted-foreground mt-2">Welcome back, {currentUser.username}</p>
             </div>
             <div className="flex items-center gap-2">

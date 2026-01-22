@@ -1,6 +1,10 @@
 import html2canvas from 'html2canvas';
 import { getPaperConfig } from './paperSizes';
 
+// Store the active Bluetooth connection
+let activeBluetoothDevice = null;
+let activeGattServer = null;
+
 // Check if a Bluetooth printer is connected
 export const isBluetoothPrinterConnected = () => {
   const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
@@ -18,6 +22,23 @@ export const getConnectedPrinter = () => {
     }
   }
   return null;
+};
+
+// Set the active Bluetooth device (called from BluetoothPrinterDialog)
+export const setActiveBluetoothDevice = (device, server) => {
+  activeBluetoothDevice = device;
+  activeGattServer = server;
+};
+
+// Get the active Bluetooth device
+export const getActiveBluetoothDevice = () => {
+  return { device: activeBluetoothDevice, server: activeGattServer };
+};
+
+// Clear active connection
+export const clearActiveBluetoothDevice = () => {
+  activeBluetoothDevice = null;
+  activeGattServer = null;
 };
 
 // Generate receipt HTML content for printing
@@ -185,42 +206,6 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   `;
 };
 
-// Send data directly to Bluetooth printer using Web Bluetooth API
-const sendToBluetoothPrinter = async (invoiceData, businessName = 'Business Name') => {
-  try {
-    // Request device with serial port service
-    const device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Serial Port Profile UUID
-    });
-    
-    const server = await device.gatt.connect();
-    
-    // Generate plain text receipt for ESC/POS printers
-    const receiptText = generatePlainTextReceipt(invoiceData, businessName);
-    
-    // Try to find a writable characteristic
-    const services = await server.getPrimaryServices();
-    
-    for (const service of services) {
-      const characteristics = await service.getCharacteristics();
-      for (const char of characteristics) {
-        if (char.properties.write || char.properties.writeWithoutResponse) {
-          const encoder = new TextEncoder();
-          const data = encoder.encode(receiptText);
-          await char.writeValue(data);
-          return true;
-        }
-      }
-    }
-    
-    throw new Error('No writable characteristic found');
-  } catch (error) {
-    console.error('Bluetooth print error:', error);
-    throw error;
-  }
-};
-
 // Generate plain text receipt for direct printing
 const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') => {
   const businessSettings = invoiceData.yourCompany || {};
@@ -231,30 +216,36 @@ const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') =
   
   let receipt = '';
   
-  // Header
-  receipt += '\x1B\x40'; // Initialize printer
-  receipt += '\x1B\x61\x01'; // Center alignment
-  receipt += '\x1B\x21\x30'; // Double height and width
+  // ESC/POS Commands
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  
+  // Header - Initialize and center
+  receipt += ESC + '@'; // Initialize printer
+  receipt += ESC + 'a' + '\x01'; // Center alignment
+  receipt += ESC + '!' + '\x30'; // Double height and width
   receipt += actualBusinessName + '\n';
-  receipt += '\x1B\x21\x00'; // Normal text
+  receipt += ESC + '!' + '\x00'; // Normal text
   if (businessSettings.address) receipt += businessSettings.address + '\n';
   if (businessSettings.phone) receipt += 'Tel: ' + businessSettings.phone + '\n';
   receipt += '\n';
   
-  // Invoice details
-  receipt += '\x1B\x61\x00'; // Left alignment
+  // Invoice details - Left align
+  receipt += ESC + 'a' + '\x00'; // Left alignment
   receipt += '--------------------------------\n';
   receipt += 'Invoice: ' + invoiceData.invoiceNumber + '\n';
   receipt += 'Date: ' + new Date().toLocaleDateString() + '\n';
   receipt += 'Time: ' + new Date().toLocaleTimeString() + '\n';
   if (invoiceData.customerName) receipt += 'Customer: ' + invoiceData.customerName + '\n';
+  if (invoiceData.customerId) receipt += 'ID: ' + invoiceData.customerId + '\n';
   if (invoiceData.cashierName) receipt += 'Cashier: ' + invoiceData.cashierName + '\n';
   receipt += '--------------------------------\n';
   
   // Items
   invoiceData.items.forEach(item => {
     const itemTotal = (item.quantity * item.amount).toFixed(2);
-    receipt += item.name.substring(0, 16).padEnd(16);
+    const itemName = item.name.length > 16 ? item.name.substring(0, 16) : item.name.padEnd(16);
+    receipt += itemName;
     receipt += (item.quantity + 'x' + item.amount).padStart(8);
     receipt += itemTotal.padStart(8) + '\n';
   });
@@ -263,15 +254,15 @@ const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') =
   
   // Totals
   receipt += ('Subtotal: ' + currencyCode + ' ' + invoiceData.subTotal).padStart(32) + '\n';
-  if (invoiceData.discountAmount > 0) {
+  if (parseFloat(invoiceData.discountAmount) > 0) {
     receipt += ('Discount: -' + currencyCode + ' ' + invoiceData.discountAmount).padStart(32) + '\n';
   }
-  if (invoiceData.taxAmount > 0) {
+  if (parseFloat(invoiceData.taxAmount) > 0) {
     receipt += ('Tax (' + invoiceData.taxRate + '%): ' + currencyCode + ' ' + invoiceData.taxAmount).padStart(32) + '\n';
   }
-  receipt += '\x1B\x21\x10'; // Bold
+  receipt += ESC + '!' + '\x10'; // Bold
   receipt += ('TOTAL: ' + currencyCode + ' ' + invoiceData.grandTotal).padStart(32) + '\n';
-  receipt += '\x1B\x21\x00'; // Normal
+  receipt += ESC + '!' + '\x00'; // Normal
   
   receipt += '--------------------------------\n';
   receipt += 'Amount Paid: ' + currencyCode + ' ' + amountPaidDisplay + '\n';
@@ -279,30 +270,89 @@ const generatePlainTextReceipt = (invoiceData, businessName = 'Business Name') =
     receipt += 'Change: ' + currencyCode + ' ' + invoiceData.changeAmount + '\n';
   }
   
-  // Footer
+  // Footer - Center
   receipt += '\n';
-  receipt += '\x1B\x61\x01'; // Center
+  receipt += ESC + 'a' + '\x01'; // Center
   receipt += 'Thank you for shopping!\n';
   receipt += 'Visit again\n';
   receipt += '\n\n\n';
-  receipt += '\x1D\x56\x00'; // Cut paper
+  receipt += GS + 'V' + '\x00'; // Cut paper (full cut)
   
   return receipt;
+};
+
+// Try to send to Bluetooth printer using stored connection
+const sendToBluetoothPrinter = async (invoiceData, businessName = 'Business Name') => {
+  const { device, server } = getActiveBluetoothDevice();
+  
+  if (!device || !server) {
+    throw new Error('No active Bluetooth connection');
+  }
+  
+  try {
+    // Check if still connected
+    if (!server.connected) {
+      // Try to reconnect
+      await device.gatt.connect();
+    }
+    
+    // Generate plain text receipt
+    const receiptText = generatePlainTextReceipt(invoiceData, businessName);
+    
+    // Try to find a writable characteristic
+    const services = await server.getPrimaryServices();
+    
+    for (const service of services) {
+      try {
+        const characteristics = await service.getCharacteristics();
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(receiptText);
+            
+            // Send data in chunks (max 512 bytes for BLE)
+            const chunkSize = 512;
+            for (let i = 0; i < data.length; i += chunkSize) {
+              const chunk = data.slice(i, i + chunkSize);
+              if (char.properties.writeWithoutResponse) {
+                await char.writeValueWithoutResponse(chunk);
+              } else {
+                await char.writeValue(chunk);
+              }
+              // Small delay between chunks
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            return true;
+          }
+        }
+      } catch (serviceError) {
+        console.log('Service error, trying next:', serviceError);
+      }
+    }
+    
+    throw new Error('No writable characteristic found');
+  } catch (error) {
+    console.error('Bluetooth print error:', error);
+    throw error;
+  }
 };
 
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
-      // Check if Bluetooth printer is connected - try direct printing first
+      // Check if Bluetooth printer is connected and try direct printing
       const connectedPrinter = getConnectedPrinter();
+      const { device, server } = getActiveBluetoothDevice();
       
-      if (connectedPrinter && navigator.bluetooth) {
+      if (connectedPrinter && device && server && navigator.bluetooth) {
         try {
           await sendToBluetoothPrinter(invoiceData, businessName);
+          console.log('Printed directly to Bluetooth printer');
           resolve();
           return;
         } catch (btError) {
-          console.log('Bluetooth print failed, falling back to system print:', btError);
+          console.log('Bluetooth print failed, falling back to system print:', btError.message);
           // Fall through to system print dialog
         }
       }
@@ -445,31 +495,26 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
             ` : ''}
           </div>
           
-          <div style="text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: ${smallFontSize};">
+          <div style="text-align: center; font-size: ${smallFontSize}; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
             <div>Thank you for shopping!</div>
             <div>Visit again</div>
           </div>
         </div>
       `;
       
-      printContent.style.position = 'absolute';
-      printContent.style.left = '-9999px';
-      printContent.style.top = '0';
-      
       const canvas = await html2canvas(printContent, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: 'white'
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
       });
       
-      const imgData = canvas.toDataURL('image/png');
+      document.body.removeChild(printContent);
+      
       const link = document.createElement('a');
-      link.download = `invoice_${invoiceData.invoiceNumber}_${new Date().getTime()}.png`;
-      link.href = imgData;
+      link.download = `invoice-${invoiceData.invoiceNumber}.png`;
+      link.href = canvas.toDataURL('image/png');
       link.click();
       
-      document.body.removeChild(printContent);
       resolve();
     } catch (error) {
       reject(error);
