@@ -98,16 +98,54 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
         throw new Error('GATT is not available on this device');
       }
 
-      // Attempt to connect
+      console.log('Connecting to GATT server...');
       const server = await device.gatt.connect();
+      console.log('GATT server connected, finding services...');
+      
+      // Get all services
+      const services = await server.getPrimaryServices();
+      console.log('Found services:', services.length);
+      
+      let characteristic = null;
+      
+      // Try to find writable characteristic
+      for (const service of services) {
+        try {
+          console.log('Checking service:', service.uuid);
+          const characteristics = await service.getCharacteristics();
+          
+          // Find characteristic with write properties
+          for (const char of characteristics) {
+            console.log('Characteristic:', char.uuid, 'Properties:', char.properties);
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              characteristic = char;
+              console.log('Found writable characteristic:', char.uuid);
+              break;
+            }
+          }
+          
+          if (characteristic) break;
+        } catch (e) {
+          console.log('Error checking service:', e);
+        }
+      }
+      
+      if (!characteristic) {
+        throw new Error('No writable characteristic found. Make sure printer is paired in Bluetooth settings first.');
+      }
       
       const savedInfo = {
         id: device.id,
         name: device.name || 'Unknown Device'
       };
       
-      // Store the active connection for direct printing
-      setActiveBluetoothDevice(device, server);
+      // Store the active connection with characteristic for direct printing
+      setActiveBluetoothDevice(device, server, characteristic);
+      
+      // Also store globally for thermal print generator to access
+      if (typeof window !== 'undefined') {
+        window.bluetoothPrinterCharacteristic = characteristic;
+      }
       
       setConnectedDevice(savedInfo);
       localStorage.setItem('connectedBluetoothPrinter', JSON.stringify(savedInfo));
@@ -120,6 +158,9 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
       device.addEventListener('gattserverdisconnected', () => {
         setConnectedDevice(null);
         clearActiveBluetoothDevice();
+        if (typeof window !== 'undefined') {
+          window.bluetoothPrinterCharacteristic = null;
+        }
         localStorage.removeItem('connectedBluetoothPrinter');
         toast.info('Printer disconnected');
       });
@@ -136,6 +177,9 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
   const disconnectDevice = () => {
     setConnectedDevice(null);
     clearActiveBluetoothDevice();
+    if (typeof window !== 'undefined') {
+      window.bluetoothPrinterCharacteristic = null;
+    }
     localStorage.removeItem('connectedBluetoothPrinter');
     setDevices([]);
     toast.success('Printer disconnected');
@@ -305,7 +349,7 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
                   <li>Use "Test Print" to verify the connection</li>
                 </ol>
                 <p className="text-xs mt-2 text-amber-600">
-                  Note: For best compatibility, use the Thermer app for printing.
+                  Note: Must use Chrome browser for Bluetooth printing.
                 </p>
               </div>
             </>
