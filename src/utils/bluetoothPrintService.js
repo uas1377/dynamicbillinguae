@@ -1,165 +1,106 @@
+import { getBusinessSettings } from "./localStorageData";
 
-// bluetoothPrintService.js - Dedicated Bluetooth printing service
+// Helper to align text for 32-character thermal printers
+const formatCol = (val, len, align = 'left') => {
+  const str = String(val || "").substring(0, len);
+  return align === 'right' ? str.padStart(len) : str.padEnd(len);
+};
 
-// Generate plain text receipt for Bluetooth thermal printer (ESC/POS format)
 const generateBluetoothReceipt = (invoiceData) => {
-  const businessSettings = invoiceData.yourCompany || {};
-  const actualBusinessName = businessSettings.name || 'Business Name';
-  const currencyCode = businessSettings.currencyCode || 'AED';
+  // 1. FIX BUSINESS NAME: Always pull fresh from Admin Settings
+  const settings = getBusinessSettings();
+  const bizName = settings.name || 'MY BUSINESS';
+  const bizAddr = settings.address || '';
+  const bizPhone = settings.phone || '';
+  const currency = settings.currencyCode || 'AED';
   
-  // Handle both naming conventions
-  const invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
-  const customerName = invoiceData.customerName || invoiceData.customer_name;
-  const customerId = invoiceData.customerId || invoiceData.customer_id;
-  const customerPhone = invoiceData.customerPhone || invoiceData.customer_phone;
-  const cashierName = invoiceData.cashierName || invoiceData.cashier_name;
-  const subTotal = invoiceData.subTotal || invoiceData.sub_total;
-  const taxRate = invoiceData.taxRate || invoiceData.tax_rate;
-  const taxAmount = invoiceData.taxAmount || invoiceData.tax_amount;
-  const discountAmount = invoiceData.discountAmount || invoiceData.discount_amount || 0;
-  const grandTotal = invoiceData.grandTotal || invoiceData.grand_total;
-  const amountReceived = invoiceData.amountReceived || invoiceData.amount_received;
-  const changeAmount = invoiceData.changeAmount || invoiceData.change_amount;
-  const isPaid = invoiceData.status !== 'unpaid';
-  const amountPaidDisplay = isPaid ? amountReceived : '0.00 (unpaid)';
-  
-  let receipt = '';
-  
-  // ESC/POS Commands
+  // 2. NORMALIZE KEYS: Support both InvoiceTab and AllInvoicesTab data
+  const invNum = invoiceData.invoiceNumber || invoiceData.invoice_number || 'N/A';
+  const items = invoiceData.items || [];
+  const total = invoiceData.grandTotal || invoiceData.grand_total || 0;
+  const received = invoiceData.amountReceived || invoiceData.amount_received || 0;
+  const change = invoiceData.changeAmount || invoiceData.change_amount || 0;
+  const custId = invoiceData.customerId || invoiceData.customer_id || 'Walk-in';
+  const date = new Date(invoiceData.date || invoiceData.created_at || Date.now()).toLocaleDateString();
+
+  let r = '';
   const ESC = '\x1B';
   const GS = '\x1D';
   
-  // Header - Initialize and center
-  receipt += ESC + '@'; // Initialize printer
-  receipt += ESC + 'a' + '\x01'; // Center alignment
-  receipt += ESC + '!' + '\x30'; // Double height and width
-  receipt += actualBusinessName + '\n';
-  receipt += ESC + '!' + '\x00'; // Normal text
-  if (businessSettings.address) receipt += businessSettings.address + '\n';
-  if (businessSettings.phone) receipt += 'Tel: ' + businessSettings.phone + '\n';
-  if (businessSettings.email) receipt += businessSettings.email + '\n';
-  receipt += '\n';
+  r += ESC + '@'; // Reset
+  r += ESC + 'a' + '\x01'; // Center
+  r += ESC + '!' + '\x30' + bizName + '\n'; // Double height/width
+  r += ESC + '!' + '\x00'; // Normal
+  if (bizAddr) r += bizAddr + '\n';
+  if (bizPhone) r += 'Tel: ' + bizPhone + '\n';
+  r += '\n';
   
-  // Invoice details - Left align
-  receipt += ESC + 'a' + '\x00'; // Left alignment
-  receipt += '--------------------------------\n';
-  receipt += 'Invoice: ' + invoiceNumber + '\n';
-  receipt += 'Date: ' + new Date().toLocaleDateString() + '\n';
-  receipt += 'Time: ' + new Date().toLocaleTimeString() + '\n';
-  if (customerName) receipt += 'Customer: ' + customerName + '\n';
-  if (customerId) receipt += 'ID: ' + customerId + '\n';
-  if (customerPhone && !customerId) receipt += 'Phone: ' + customerPhone + '\n';
-  if (cashierName) receipt += 'Cashier: ' + cashierName + '\n';
-  receipt += '--------------------------------\n';
+  r += ESC + 'a' + '\x00'; // Left align
+  r += '--------------------------------\n';
+  r += `Inv: ${invNum}\n`;
+  r += `Date: ${date}\n`;
+  r += `Cust: ${custId}\n`;
+  r += '--------------------------------\n';
   
-  // Items
-  invoiceData.items.forEach(item => {
-    const itemTotal = (item.quantity * item.amount).toFixed(2);
-    const itemName = item.name.length > 16 ? item.name.substring(0, 16) : item.name.padEnd(16);
-    receipt += itemName;
-    receipt += (item.quantity + 'x' + item.amount).padStart(8);
-    receipt += itemTotal.padStart(8) + '\n';
+  // 3. FIX ALIGNMENT: 32 Column Layout
+  // Columns: Item/SKU(14) Qty(4) Rate(6) Total(8)
+  r += 'Item/SKU       Qty  Rate  Total \n';
+  r += '--------------------------------\n';
+  
+  items.forEach(item => {
+    const rate = Number(item.amount || item.price || 0).toFixed(2);
+    const lineTotal = (Number(item.quantity) * Number(item.amount || item.price)).toFixed(2);
     
-    // Add SKU on next line if exists
+    // First line: Name, Qty, Rate, Total
+    r += formatCol(item.name, 14) + 
+         formatCol(item.quantity, 4, 'right') + 
+         formatCol(rate, 6, 'right') + 
+         formatCol(lineTotal, 8, 'right') + '\n';
+    
+    // Second line: SKU (if available)
     if (item.sku) {
-      receipt += '  SKU: ' + item.sku + '\n';
+      r += ` SKU: ${item.sku}\n`;
     }
   });
+
+  r += '--------------------------------\n';
   
-  receipt += '--------------------------------\n';
+  // 4. TOTALS
+  r += ESC + 'a' + '\x02'; // Right align
+  r += `GRAND TOTAL: ${currency} ${Number(total).toFixed(2)}\n`;
+  r += `Received:    ${currency} ${Number(received).toFixed(2)}\n`;
+  r += `Change:      ${currency} ${Number(change).toFixed(2)}\n`;
   
-  // Totals
-  receipt += ('Subtotal: ' + currencyCode + ' ' + subTotal).padStart(32) + '\n';
-  if (parseFloat(discountAmount) > 0) {
-    receipt += ('Discount: -' + currencyCode + ' ' + discountAmount).padStart(32) + '\n';
-  }
-  if (parseFloat(taxAmount) > 0) {
-    receipt += ('Tax (' + taxRate + '%): ' + currencyCode + ' ' + taxAmount).padStart(32) + '\n';
-  }
-  receipt += ESC + '!' + '\x10'; // Bold
-  receipt += ('TOTAL: ' + currencyCode + ' ' + grandTotal).padStart(32) + '\n';
-  receipt += ESC + '!' + '\x00'; // Normal
+  r += '\n' + ESC + 'a' + '\x01'; // Center footer
+  r += (settings.footerNote || 'Thank you for your visit!') + '\n\n\n\n' + GS + 'V' + '\x00';
   
-  receipt += '--------------------------------\n';
-  receipt += 'Amount Paid: ' + currencyCode + ' ' + amountPaidDisplay + '\n';
-  if (isPaid && parseFloat(changeAmount) > 0) {
-    receipt += 'Change: ' + currencyCode + ' ' + changeAmount + '\n';
-  }
-  
-  // Footer - Center
-  receipt += '\n';
-  receipt += ESC + 'a' + '\x01'; // Center
-  receipt += 'Thank you for shopping!\n';
-  receipt += 'Visit again\n';
-  receipt += '\n\n\n';
-  receipt += GS + 'V' + '\x00'; // Cut paper (full cut)
-  
-  return receipt;
+  return r;
 };
 
-// Send receipt to Bluetooth printer
 export const sendToBluetoothPrinter = async (invoiceData) => {
-  // Check if Bluetooth characteristic is available
-  if (typeof window === 'undefined' || !window.bluetoothPrinterCharacteristic) {
-    throw new Error('No Bluetooth printer connected');
+  const char = window.bluetoothPrinterCharacteristic;
+  if (!char) {
+    throw new Error('Printer not connected. Please connect via Bluetooth Dialog.');
   }
-  
+
   try {
-    const characteristic = window.bluetoothPrinterCharacteristic;
-    console.log('Using stored Bluetooth characteristic for printing');
-    
-    // Generate plain text receipt with ESC/POS commands
     const receiptText = generateBluetoothReceipt(invoiceData);
     const encoder = new TextEncoder();
     const data = encoder.encode(receiptText);
     
-    // Send data in chunks (max 512 bytes for BLE)
-    const chunkSize = 512;
-    for (let i = 0; i < data.length; i += chunkSize) {
-      const chunk = data.slice(i, i + chunkSize);
-      
-      if (characteristic.properties.writeWithoutResponse) {
-        await characteristic.writeValueWithoutResponse(chunk);
-      } else {
-        await characteristic.writeValue(chunk);
-      }
-      
-      // Small delay between chunks to prevent buffer overflow
-      await new Promise(resolve => setTimeout(resolve, 50));
+    // Chunk sending to prevent data loss on cheap printers
+    const step = 512;
+    for (let i = 0; i < data.length; i += step) {
+      await char.writeValue(data.slice(i, i + step));
+      await new Promise(res => setTimeout(res, 50));
     }
-    
-    console.log('Receipt sent successfully to Bluetooth printer');
     return true;
-  } catch (error) {
-    console.error('Bluetooth print error:', error);
-    throw error;
+  } catch (err) {
+    console.error("BT Print Error:", err);
+    throw err;
   }
 };
 
-// Check if Bluetooth printer is connected
 export const isBluetoothPrinterConnected = () => {
-  return typeof window !== 'undefined' && !!window.bluetoothPrinterCharacteristic;
-};
-
-// Print with automatic fallback
-export const printReceipt = async (invoiceData, fallbackPrintFunction) => {
-  // Try Bluetooth first if available
-  if (isBluetoothPrinterConnected()) {
-    try {
-      await sendToBluetoothPrinter(invoiceData);
-      console.log('Printed via Bluetooth');
-      return { method: 'bluetooth', success: true };
-    } catch (error) {
-      console.error('Bluetooth print failed, falling back to normal print:', error);
-      // Fall through to fallback
-    }
-  }
-  
-  // Use fallback (normal print)
-  if (fallbackPrintFunction) {
-    await fallbackPrintFunction(invoiceData);
-    return { method: 'fallback', success: true };
-  }
-  
-  throw new Error('No print method available');
+  return !!window.bluetoothPrinterCharacteristic;
 };
