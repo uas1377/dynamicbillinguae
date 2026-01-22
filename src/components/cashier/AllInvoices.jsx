@@ -286,22 +286,42 @@ const AllInvoices = () => {
   const printInvoice = async (invoice) => {
     // Find customer to get proper customer ID
     const customer = customers.find(c => c.id === invoice.customer_id);
+    const flat = flats.find(f => f.id === invoice.flat_id);
     
+    // Map data so thermalPrintGenerator understands it
     const invoiceData = {
+      ...invoice, // Keep all original data
+      invoice_number: invoice.invoice_number,
       invoiceNumber: invoice.invoice_number,
+      customer_name: invoice.customer_name || '',
       customerName: invoice.customer_name || '',
-      customerId: customer?.phone || invoice.customer_phone || '',
+      customer_phone: customer?.phone || invoice.customer_phone || '',
       customerPhone: customer?.phone || invoice.customer_phone || '',
-      items: invoice.items,
+      customerId: flat?.user_id || customer?.phone || invoice.customer_phone || 'N/A',
+      building_name: invoice.building_name,
+      buildingName: invoice.building_name,
+      flat_number: invoice.flat_number,
+      flatNumber: invoice.flat_number,
+      items: invoice.items || [],
+      sub_total: parseFloat(invoice.sub_total).toFixed(2),
       subTotal: parseFloat(invoice.sub_total).toFixed(2),
+      discount_amount: parseFloat(invoice.discount_amount || 0).toFixed(2),
       discountAmount: parseFloat(invoice.discount_amount || 0).toFixed(2),
+      tax_rate: invoice.tax_rate || 0,
       taxRate: invoice.tax_rate || 0,
+      tax_amount: parseFloat(invoice.tax_amount || 0).toFixed(2),
       taxAmount: parseFloat(invoice.tax_amount || 0).toFixed(2),
+      grand_total: parseFloat(invoice.grand_total).toFixed(2),
       grandTotal: parseFloat(invoice.grand_total).toFixed(2),
+      amount_received: invoice.status === 'paid' ? parseFloat(invoice.amount_received || invoice.grand_total).toFixed(2) : '0.00',
       amountReceived: invoice.status === 'paid' ? parseFloat(invoice.amount_received || invoice.grand_total).toFixed(2) : '0.00',
+      change_amount: parseFloat(invoice.change_amount || 0).toFixed(2),
       changeAmount: parseFloat(invoice.change_amount || 0).toFixed(2),
+      cashier_name: invoice.cashier_name || '',
       cashierName: invoice.cashier_name || '',
-      status: invoice.status,
+      created_at: invoice.created_at,
+      date: invoice.created_at,
+      status: invoice.status || 'unpaid',
       yourCompany: businessSettings
     };
     
