@@ -1,12 +1,60 @@
 import { getBusinessSettings } from "./localStorageData";
 import { getStoredFlats } from "./buildingFlatStorage";
 
-export const printHistoricalReceipt = (invoice) => {
+export const printHistoricalReceipt = async (invoice) => {
   const settings = getBusinessSettings();
   const flats = getStoredFlats();
-  // Detect currency from settings or default to currency
+  
+  // Check if Bluetooth printer is connected
+  const isBluetoothConnected = typeof window !== 'undefined' && window.bluetoothPrinterCharacteristic;
+  
+  if (isBluetoothConnected) {
+    // Use Bluetooth printer
+    try {
+      const { generateThermalPrint } = await import('./thermalPrintGenerator');
+      
+      // Format invoice data for thermal printer
+      const thermalData = {
+        invoice_number: invoice.invoice_number,
+        invoiceNumber: invoice.invoice_number,
+        created_at: invoice.created_at,
+        customer_name: invoice.customer_name,
+        customerName: invoice.customer_name,
+        customer_phone: invoice.customer_phone,
+        customerPhone: invoice.customer_phone,
+        customerId: flats.find(f => f.id === invoice.flat_id)?.user_id,
+        building_name: invoice.building_name,
+        flat_number: invoice.flat_number,
+        cashier_name: invoice.cashier_name,
+        cashierName: invoice.cashier_name,
+        paid_by_cashier: invoice.paid_by_cashier,
+        items: invoice.items,
+        sub_total: invoice.sub_total,
+        subTotal: invoice.sub_total,
+        tax_rate: invoice.tax_rate,
+        taxRate: invoice.tax_rate,
+        tax_amount: invoice.tax_amount,
+        taxAmount: invoice.tax_amount,
+        grand_total: invoice.grand_total,
+        grandTotal: invoice.grand_total,
+        amount_received: invoice.amount_received,
+        amountReceived: invoice.amount_received,
+        change_amount: invoice.change_amount,
+        changeAmount: invoice.change_amount,
+        status: invoice.status,
+        yourCompany: settings
+      };
+      
+      await generateThermalPrint(thermalData);
+      return;
+    } catch (error) {
+      console.error('Bluetooth print failed, falling back to browser print:', error);
+      // Fall through to browser print
+    }
+  }
+  
+  // Fallback to browser print dialog
   const currencyCode = settings.currencyCode || 'currency';
-
   const flatInfo = flats.find(f => f.id === invoice.flat_id);
 
   const printWindow = window.open('', '_blank', 'width=350,height=600');
