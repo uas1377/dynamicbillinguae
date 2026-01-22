@@ -8,12 +8,6 @@ import { printHistoricalReceipt } from './receiptService';
 let activeBluetoothDevice = null;
 let activeGattServer = null;
 
-// Check if a Bluetooth printer is connected
-export const isBluetoothPrinterConnected_Legacy = () => {
-  const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
-  return !!savedDevice;
-};
-
 // Get connected Bluetooth printer info
 export const getConnectedPrinter = () => {
   const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
@@ -50,7 +44,7 @@ export const clearActiveBluetoothDevice = () => {
   }
 };
 
-// Generate receipt HTML content for printing (UNCHANGED - original version)
+// Generate receipt HTML content for printing (UNCHANGED)
 const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
   const businessSettings = invoiceData.yourCompany || {};
   const actualBusinessName = businessSettings.name || businessName;
@@ -230,33 +224,30 @@ const generateReceiptHTML = (invoiceData, businessName = 'Business Name') => {
 };
 
 /**
- * MAIN ROUTER FUNCTION - REPLACED VERSION
- * This decides whether to use Bluetooth or Browser Print
+ * MAIN ROUTER FUNCTION
+ * Decides whether to use Bluetooth or Browser Print
  */
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
-  // 1. Check if Bluetooth is connected in the browser window
-  const isBluetoothActive = typeof window !== 'undefined' && !!window.bluetoothPrinterCharacteristic;
-  
-  if (isBluetoothActive) {
+  // 1. Check Bluetooth connection using the shared function
+  if (isBluetoothPrinterConnected()) {
     try {
       console.log("Routing to Bluetooth Service...");
-      // We pass the invoice data to the Bluetooth service
       return await sendToBluetoothPrinter(invoiceData);
     } catch (error) {
       console.error("Bluetooth print failed, falling back to Browser Print:", error);
-      // If Bluetooth fails (e.g. range issue), try Browser Print fallback below
+      // continue to fallback
     }
   }
   
-  // 2. Fallback: Browser Print (Standard Dialog)
-  console.log("No Bluetooth found. Routing to Browser Print...");
+  // 2. Fallback: Browser Print
+  console.log("No Bluetooth found or failed. Routing to Browser Print...");
   
-  // Check if printHistoricalReceipt is available
+  // Prefer printHistoricalReceipt if it exists (more domain-specific formatting)
   if (typeof printHistoricalReceipt === 'function') {
     return printHistoricalReceipt(invoiceData);
   }
   
-  // If printHistoricalReceipt doesn't exist, use the original browser print method
+  // Otherwise fall back to classic browser print window
   return new Promise(async (resolve, reject) => {
     try {
       const htmlContent = generateReceiptHTML(invoiceData, businessName);
@@ -279,7 +270,7 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
   });
 };
 
-// Save as image function (UNCHANGED - original version)
+// Save as image function (UNCHANGED)
 export const saveAsImage = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
