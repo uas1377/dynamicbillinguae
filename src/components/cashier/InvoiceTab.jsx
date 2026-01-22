@@ -204,27 +204,25 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
 
   const updateProductQuantityDirect = (productId, value) => {
     if (value === '' || value === null || value === undefined) {
+      setSelectedProducts(selectedProducts.map(product =>
+        product.id === productId ? { ...product, quantity: 0, quantityInput: '' } : product
+      ));
       return;
     }
 
-    const numValue = parseInt(value);
-    if (isNaN(numValue) || numValue < 0) {
-      return;
-    }
+    const newQuantity = parseFloat(value);
+    if (isNaN(newQuantity)) return;
 
-    const updatedProducts = selectedProducts.map(product => {
-      if (product.id === productId) {
-        return { ...product, quantity: numValue };
-      }
-      return product;
-    }).filter(product => product.quantity > 0);
-
-    setSelectedProducts(updatedProducts);
+    setSelectedProducts(selectedProducts.map(product =>
+      product.id === productId ? { ...product, quantity: Math.max(0, newQuantity), quantityInput: value } : product
+    ));
   };
 
   const calculateSubtotal = () => {
     return selectedProducts.reduce((sum, product) => sum + (product.quantity * product.amount), 0);
   };
+
+  const calculateDiscount = () => 0;
 
   const calculateTax = () => {
     return (calculateSubtotal() * taxRate) / 100;
@@ -235,373 +233,322 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
   };
 
   const calculateChange = () => {
-    return Math.max(0, amountReceived - calculateTotal());
+    const change = amountReceived - calculateTotal();
+    return change > 0 ? change : 0;
   };
 
-  const printInvoice = async () => {
-    if (selectedProducts.length === 0) {
-      toast.error('No products selected');
-      return;
-    }
-
-    const customer = getCustomerFromSelection();
-    const selectedFlatObj = flats.find(f => f.id === selectedFlat);
-    const selectedBuildingObj = buildings.find(b => b.id === selectedBuilding);
-
-    const invoiceData = {
-      invoice_number: generateInvoiceNumber(),
-      date: new Date().toISOString(),
-      customer_name: customer?.name || selectedFlatObj?.owner_name || '',
-      customer_phone: customer?.phone || selectedFlatObj?.phone || '',
-      building_name: selectedBuildingObj?.name || '',
-      flat_number: selectedFlatObj?.flat_number || '',
-      items: selectedProducts.map(p => ({
-        name: p.name,
-        sku: p.sku || '',
-        barcode: p.barcode || '',
-        quantity: p.quantity,
-        amount: p.amount
-      })),
-      sub_total: calculateSubtotal(),
-      tax_rate: taxRate,
-      tax_amount: calculateTax(),
-      grand_total: calculateTotal(),
-      amount_received: amountReceived,
-      change_amount: calculateChange(),
-      status: invoiceStatus,
-      cashier_name: cashierName
-    };
-
-    try {
-      await generateThermalPrint(invoiceData, businessSettings);
-      toast.success('Invoice sent to printer');
-    } catch (error) {
-      toast.error('Print failed: ' + error.message);
-    }
-  };
-
-  const saveAsImageHandler = async () => {
-    if (selectedProducts.length === 0) {
-      toast.error('No products selected');
-      return;
-    }
-
-    const customer = getCustomerFromSelection();
-    const selectedFlatObj = flats.find(f => f.id === selectedFlat);
-    const selectedBuildingObj = buildings.find(b => b.id === selectedBuilding);
-
-    const invoiceData = {
-      invoice_number: generateInvoiceNumber(),
-      date: new Date().toISOString(),
-      customer_name: customer?.name || selectedFlatObj?.owner_name || '',
-      customer_phone: customer?.phone || selectedFlatObj?.phone || '',
-      building_name: selectedBuildingObj?.name || '',
-      flat_number: selectedFlatObj?.flat_number || '',
-      items: selectedProducts.map(p => ({
-        name: p.name,
-        sku: p.sku || '',
-        barcode: p.barcode || '',
-        quantity: p.quantity,
-        amount: p.amount
-      })),
-      sub_total: calculateSubtotal(),
-      tax_rate: taxRate,
-      tax_amount: calculateTax(),
-      grand_total: calculateTotal(),
-      amount_received: amountReceived,
-      change_amount: calculateChange(),
-      status: invoiceStatus,
-      cashier_name: cashierName
-    };
-
-    try {
-      await saveAsImage(invoiceData, businessSettings);
-      toast.success('Invoice saved as image');
-    } catch (error) {
-      toast.error('Save failed: ' + error.message);
-    }
+  const getNextInvoiceNumber = () => {
+    return generateInvoiceNumber();
   };
 
   const saveInvoice = () => {
     if (selectedProducts.length === 0) {
-      toast.error('No products selected');
+      toast.error('Please add at least one product to the invoice');
       return;
     }
-
-    const customer = getCustomerFromSelection();
-    const selectedFlatObj = flats.find(f => f.id === selectedFlat);
-    const selectedBuildingObj = buildings.find(b => b.id === selectedBuilding);
-
-    const invoiceData = {
-      invoice_number: generateInvoiceNumber(),
-      created_at: new Date().toISOString(),
-      customer_name: customer?.name || selectedFlatObj?.owner_name || '',
-      customer_phone: customer?.phone || selectedFlatObj?.phone || '',
-      building_id: selectedBuilding || '',
-      building_name: selectedBuildingObj?.name || '',
-      flat_id: selectedFlat || '',
-      flat_number: selectedFlatObj?.flat_number || '',
-      items: selectedProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku || '',
-        barcode: p.barcode || '',
-        quantity: p.quantity,
-        amount: p.amount,
-        buying_price: p.buying_price || 0
-      })),
-      sub_total: calculateSubtotal(),
-      tax_rate: taxRate,
-      tax_amount: calculateTax(),
-      grand_total: calculateTotal(),
-      amount_received: amountReceived,
-      change_amount: calculateChange(),
-      status: invoiceStatus,
-      cashier_name: cashierName,
-      paid_by_cashier: invoiceStatus === 'paid' ? cashierName : null
-    };
-
+    const productsWithoutAmount = selectedProducts.filter(p => p.amount <= 0);
+    if (productsWithoutAmount.length > 0) {
+      toast.error('Please set amount for all products');
+      return;
+    }
     try {
-      addInvoiceToStorage(invoiceData);
-      
-      // Update product quantities in storage
-      selectedProducts.forEach(product => {
-        const updatedProduct = {
-          ...product,
-          quantity: product.quantity - product.quantity
-        };
-        updateProductInStorage(updatedProduct);
+      const invoiceNumber = getNextInvoiceNumber();
+      const customer = getCustomerFromSelection();
+      const building = buildings.find(b => b.id === selectedBuilding);
+      const flat = flats.find(f => f.id === selectedFlat);
+      const newInvoice = {
+        invoice_number: invoiceNumber,
+        customer_id: customer?.id || null,
+        customer_phone: flat?.user_id || customer?.phone || null,
+        customer_name: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : null),
+        flat_id: selectedFlat, // Ensures flat_id is saved
+        items: selectedProducts,
+        sub_total: calculateSubtotal(),
+        tax_rate: taxRate,
+        tax_amount: calculateTax(),
+        grand_total: calculateTotal(),
+        status: invoiceStatus,
+        amount_received: invoiceStatus === 'paid' ? amountReceived : 0,
+        change_amount: calculateChange(),
+        cashier_name: cashierName,
+        date: new Date().toISOString()
+      };
+      addInvoiceToStorage(newInvoice);
+      selectedProducts.forEach((soldProduct) => {
+        const product = products.find(p => p.id === soldProduct.id);
+        if (product) {
+          const newQuantity = Math.max(0, product.quantity - soldProduct.quantity);
+          updateProductInStorage(product.id, { quantity: newQuantity });
+        }
       });
 
-      toast.success('Invoice saved successfully');
-      
-      // Clear form
-      setSelectedProducts([]);
-      setSelectedBuilding('');
-      setSelectedFlat('');
-      setTaxRate(0);
-      setAmountReceived(0);
-      setInvoiceStatus('paid');
+      toast.success(`Invoice ${invoiceNumber} saved successfully`);
       setShowCheckoutDialog(false);
-      
-      // Reload products to reflect updated quantities
-      loadData();
-      
+
       if (onSave) {
-        onSave(tabId);
+        onSave();
       }
     } catch (error) {
       toast.error('Failed to save invoice: ' + error.message);
     }
   };
 
-  const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    (product.sku && product.sku.toLowerCase().includes(productSearch.toLowerCase())) ||
-    (product.barcode && product.barcode.toLowerCase().includes(productSearch.toLowerCase()))
-  );
+  const printInvoice = async () => {
+    if (selectedProducts.length === 0) {
+      toast.error('Please add products to print invoice');
+      return;
+    }
 
+    const invoiceNumber = getNextInvoiceNumber();
+    const customer = getCustomerFromSelection();
+    const building = buildings.find(b => b.id === selectedBuilding);
+    const flat = flats.find(f => f.id === selectedFlat);
+
+    const invoiceData = {
+      invoiceNumber,
+      customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerId: flat?.user_id || '',
+      customerPhone: customer?.phone || '',
+      cashierName: cashierName,
+      items: selectedProducts,
+      subTotal: calculateSubtotal().toFixed(2),
+      discountAmount: calculateDiscount().toFixed(2),
+      taxRate: taxRate,
+      taxAmount: calculateTax().toFixed(2),
+      grandTotal: calculateTotal().toFixed(2),
+      amountReceived: invoiceStatus === 'paid' ? amountReceived.toFixed(2) : '0.00',
+      changeAmount: calculateChange().toFixed(2),
+      status: invoiceStatus,
+      yourCompany: businessSettings
+    };
+
+    try {
+      await generateThermalPrint(invoiceData);
+      toast.success('Invoice sent to printer');
+    } catch (error) {
+      toast.error('Failed to print invoice');
+    }
+  };
+
+  const saveAsImageHandler = async () => {
+    if (selectedProducts.length === 0) {
+      toast.error('Please add products to save invoice');
+      return;
+    }
+
+    const invoiceNumber = getNextInvoiceNumber();
+    const customer = getCustomerFromSelection();
+    const building = buildings.find(b => b.id === selectedBuilding);
+    const flat = flats.find(f => f.id === selectedFlat);
+
+    const invoiceData = {
+      invoiceNumber,
+      customerName: customer?.name || (building && flat ? `${building.name}, Flat ${flat.flat_number}` : ''),
+      customerId: flat?.user_id || '',
+      customerPhone: customer?.phone || '',
+      cashierName: cashierName,
+      items: selectedProducts,
+      subTotal: calculateSubtotal().toFixed(2),
+      discountAmount: calculateDiscount().toFixed(2),
+      taxRate: taxRate,
+      taxAmount: calculateTax().toFixed(2),
+      grandTotal: calculateTotal().toFixed(2),
+      amountReceived: invoiceStatus === 'paid' ? amountReceived.toFixed(2) : '0.00',
+      changeAmount: calculateChange().toFixed(2),
+      status: invoiceStatus,
+      yourCompany: businessSettings || { name: '', address: '', phone: '', logo: '' }
+    };
+
+    try {
+      await saveAsImage(invoiceData);
+      toast.success('Invoice saved as image');
+    } catch (error) {
+      toast.error('Failed to save invoice as image');
+    }
+  };
+
+  const handleOpenCheckout = () => {
+    if (selectedProducts.length === 0) {
+      toast.error('Please add at least one product');
+      return;
+    }
+    setAmountReceived(calculateTotal());
+    setShowCheckoutDialog(true);
+  };
+
+  // FIXED: Move filteredFlats definition BEFORE the return statement
   const filteredFlats = flats.filter(flat =>
-    flat.flat_number.toLowerCase().includes(flatSearch.toLowerCase()) ||
-    (flat.owner_name && flat.owner_name.toLowerCase().includes(flatSearch.toLowerCase())) ||
-    (flat.phone && flat.phone.includes(flatSearch))
+    flat.flat_number.toLowerCase().includes(flatSearch.toLowerCase())
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
-      {/* Product List Section */}
-      <Card className="gradient-card shadow-soft border-0 flex flex-col h-full">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+    <div className="space-y-6 pb-24">
+      {/* Product Selection */}
+      <Card id="product-selection" className="gradient-card shadow-soft border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
-            Available Products
+            Select Products
           </CardTitle>
-          <div className="relative">
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
             <Input
-              type="text"
-              placeholder="Search products..."
+              placeholder="Search products by name or SKU..."
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
-              className="pl-3 h-9 text-sm"
             />
           </div>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {filteredProducts.map((product) => (
-              <Card 
-                key={product.id} 
-                className="cursor-pointer hover:shadow-md transition-shadow border"
-                onClick={() => addProductToInvoice(product)}
-              >
-                <CardContent className="p-3">
-                  <div className="flex flex-col gap-1">
-                    <h4 className="font-semibold text-sm line-clamp-2">{product.name}</h4>
-                    <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-                      {product.sku && (
-                        <Badge variant="outline" className="text-xs px-1 py-0">
-                          {product.sku}
-                        </Badge>
-                      )}
-                      {product.barcode && (
-                        <Badge variant="outline" className="text-xs px-1 py-0">
-                          {product.barcode}
-                        </Badge>
-                      )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[60vh] overflow-y-auto">
+            {products
+              .filter(product =>
+                product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                (product.sku && product.sku.toLowerCase().includes(productSearch.toLowerCase()))
+              )
+              .map((product) => (
+                <Card
+                  key={product.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow border"
+                  onClick={() => addProductToInvoice(product)}
+                >
+                  <CardContent className="p-3 text-center">
+                    <div className="w-10 h-10 mx-auto mb-2 rounded-lg gradient-primary flex items-center justify-center">
+                      <ShoppingCart className="w-5 h-5 text-white" />
                     </div>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-sm font-bold text-primary">
-                        {formatCurrency(product.price, businessSettings.currencyCode || 'currency')}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Stock: {product.quantity}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Invoice Section */}
-      <Card className="gradient-card shadow-soft border-0 flex flex-col h-full">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-base">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Current Invoice
-            </div>
-            <Button 
-              onClick={() => setShowCheckoutDialog(true)}
-              disabled={selectedProducts.length === 0}
-              className="gradient-primary text-white border-0 h-8 text-sm"
-            >
-              <ArrowRight className="w-4 h-4 mr-1" />
-              Checkout
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto p-3 space-y-3">
-          {/* Selected Products */}
-          <div className="space-y-2">
-            {selectedProducts.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">No products selected</p>
-              </div>
-            ) : (
-              selectedProducts.map((product) => (
-                <Card key={product.id} className="border">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm">{product.name}</h4>
-                        {product.sku && (
-                          <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
-                        )}
-                      </div>
-                      <span className="text-sm font-bold">
-                        {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'currency')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateProductQuantity(product.id, -1)}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        value={product.quantity}
-                        onChange={(e) => updateProductQuantityDirect(product.id, e.target.value)}
-                        className="h-7 w-16 text-center text-sm"
-                        min="1"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateProductQuantity(product.id, 1)}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                      <span className="text-xs text-muted-foreground ml-auto">
-                        @ {formatCurrency(product.amount, businessSettings.currencyCode || 'currency')}
-                      </span>
-                    </div>
+                    <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
+                    <p className="text-xs text-muted-foreground">{businessSettings.currencyCode || 'currency'} {product.price}</p>
                   </CardContent>
                 </Card>
-              ))
-            )}
+              ))}
           </div>
 
-          {/* Summary */}
-          {selectedProducts.length > 0 && (
-            <Card className="border-2 border-primary">
-              <CardContent className="p-3 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span className="font-semibold">{formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'currency')}</span>
-                </div>
-                {taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span>Tax ({taxRate}%):</span>
-                    <span className="font-semibold">{formatCurrency(calculateTax(), businessSettings.currencyCode || 'currency')}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Total:</span>
-                  <span className="text-primary">{formatCurrency(calculateTotal(), businessSettings.currencyCode || 'currency')}</span>
-                </div>
-              </CardContent>
-            </Card>
+          {products.length === 0 && (
+            <div className="text-center py-8">
+              <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-lg font-semibold mb-2">No Products Available</p>
+              <p className="text-muted-foreground">Please add products first to create invoices.</p>
+            </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Fixed Bottom Navigation Bar */}
+      {selectedProducts.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 p-3 sm:p-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="secondary" className="text-sm px-2 py-1">
+                {selectedProducts.length} Item{selectedProducts.length > 1 ? 's' : ''}
+              </Badge>
+              <span className="text-sm font-semibold">
+                {formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'currency')}
+              </span>
+            </div>
+            <Button
+              onClick={handleOpenCheckout}
+              className="gradient-primary flex items-center gap-2"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Products Preview */}
+      {selectedProducts.length > 0 && (
+        <Card className="gradient-card shadow-soft border-0">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="w-5 h-5" />
+              Selected Items ({selectedProducts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {selectedProducts.map((product) => (
+                <div key={product.id} className="flex items-center justify-between p-2 sm:p-3 border rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-sm truncate block">{product.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <span className="w-6 text-center text-sm">{product.quantity}</span>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                    <span className="ml-2 font-semibold text-sm w-16 text-right">
+                      {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'currency')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Checkout Dialog */}
       <Dialog open={showCheckoutDialog} onOpenChange={setShowCheckoutDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl">Invoice Checkout</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <FileText className="w-5 h-5" />
+              Invoice Details
+            </DialogTitle>
             <DialogDescription>
-              Review and complete the invoice details
+              Review selected products, customer details, tax, payment status, and finalize the invoice.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
-            {/* Invoice Items Table */}
-            <div className="border rounded-lg overflow-hidden">
+            <div className="text-sm text-muted-foreground">
+              Cashier: <span className="font-semibold text-foreground">{cashierName}</span>
+            </div>
+
+            {/* Products Table */}
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[40%]">Product</TableHead>
-                    <TableHead className="text-center">Qty</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-xs">Product</TableHead>
+                    <TableHead className="text-center text-xs w-28">Qty</TableHead>
+                    <TableHead className="text-right text-xs w-20">Rate</TableHead>
+                    <TableHead className="text-right text-xs w-20">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {selectedProducts.map((product) => (
                     <TableRow key={product.id}>
+                      <TableCell className="text-xs">
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-muted-foreground text-[10px]">{product.barcode || product.sku || '-'}</div>
+                      </TableCell>
                       <TableCell>
-                        <div>
-                          <div className="font-medium">{product.name}</div>
-                          {product.sku && (
-                            <div className="text-xs text-muted-foreground">SKU: {product.sku}</div>
-                          )}
+                        <div className="flex items-center justify-center gap-1">
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, -1)}>
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <Input
+                            id={`qty-${product.id}`}
+                            type="number"
+                            value={product.quantityInput !== undefined ? product.quantityInput : product.quantity}
+                            onChange={(e) => updateProductQuantityDirect(product.id, e.target.value)}
+                            className="w-14 h-6 text-xs text-center p-1"
+                            min="0"
+                            step="0.01"
+                          />
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateProductQuantity(product.id, 1)}>
+                            <Plus className="w-3 h-3" />
+                          </Button>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">{product.quantity}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-xs">
                         {formatCurrency(product.amount, businessSettings.currencyCode || 'currency')}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold text-xs">
                         {formatCurrency(product.quantity * product.amount, businessSettings.currencyCode || 'currency')}
                       </TableCell>
                     </TableRow>
@@ -610,29 +557,30 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               </Table>
             </div>
 
-            {/* Totals Summary */}
-            <Card className="bg-muted/50">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between text-sm">
+            {/* Subtotal, Tax, Total */}
+            <div className="flex justify-end">
+              <div className="w-full sm:w-64 space-y-1 text-sm">
+                <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span className="font-semibold">{formatCurrency(calculateSubtotal(), businessSettings.currencyCode || 'currency')}</span>
                 </div>
                 {taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between">
                     <span>Tax ({taxRate}%):</span>
                     <span className="font-semibold">{formatCurrency(calculateTax(), businessSettings.currencyCode || 'currency')}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xl font-bold border-t pt-2">
-                  <span>Grand Total:</span>
+                <div className="flex justify-between text-base font-bold border-t pt-2">
+                  <span>Total:</span>
                   <span className="text-primary">{formatCurrency(calculateTotal(), businessSettings.currencyCode || 'currency')}</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Customer Selection */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+              <Label className="text-sm font-semibold">Customer (Optional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="building-select" className="flex items-center gap-1 text-xs">
                     <Building2 className="w-3 h-3" />
@@ -764,6 +712,11 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
                 <Image className="w-4 h-4" />
                 <span className="hidden sm:inline">Image</span>
               </Button>
+              <QRCodeButton amount={calculateTotal()} className="h-10 w-full" />
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={saveInvoice} className="gradient-primary text-white border-0 h-10">
+                Save
+              </Button>
               <Button 
                 onClick={async () => {
                   await printInvoice();
@@ -773,12 +726,6 @@ const InvoiceTab = ({ tabId, onSave, tabData, updateTabData }) => {
               >
                 <Printer className="w-4 h-4 mr-1" />
                 Print & Save
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <QRCodeButton amount={calculateTotal()} className="h-10 w-full" />
-              <Button onClick={saveInvoice} className="gradient-primary text-white border-0 h-10">
-                Save
               </Button>
             </div>
           </div>
