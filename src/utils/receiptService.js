@@ -1,12 +1,56 @@
 import { getBusinessSettings } from "./localStorageData";
 import { getStoredFlats } from "./buildingFlatStorage";
+import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from "./bluetoothPrintService";
 
-export const printHistoricalReceipt = (invoice) => {
+export const printHistoricalReceipt = async (invoice) => {
   const settings = getBusinessSettings();
   const flats = getStoredFlats();
-  // Detect currency from settings or default to currency
+  
+  // Check if Bluetooth printer is connected
+  if (isBluetoothPrinterConnected()) {
+    try {
+      // Format invoice data for Bluetooth printer
+      const bluetoothData = {
+        invoiceNumber: invoice.invoice_number,
+        invoice_number: invoice.invoice_number,
+        customerName: invoice.customer_name,
+        customer_name: invoice.customer_name,
+        customerPhone: invoice.customer_phone,
+        customer_phone: invoice.customer_phone,
+        customerId: flats.find(f => f.id === invoice.flat_id)?.user_id,
+        customer_id: flats.find(f => f.id === invoice.flat_id)?.user_id,
+        cashierName: invoice.cashier_name,
+        cashier_name: invoice.cashier_name,
+        items: invoice.items,
+        subTotal: invoice.sub_total,
+        sub_total: invoice.sub_total,
+        taxRate: invoice.tax_rate,
+        tax_rate: invoice.tax_rate,
+        taxAmount: invoice.tax_amount,
+        tax_amount: invoice.tax_amount,
+        discountAmount: invoice.discount_amount || 0,
+        discount_amount: invoice.discount_amount || 0,
+        grandTotal: invoice.grand_total,
+        grand_total: invoice.grand_total,
+        amountReceived: invoice.amount_received,
+        amount_received: invoice.amount_received,
+        changeAmount: invoice.change_amount,
+        change_amount: invoice.change_amount,
+        status: invoice.status,
+        yourCompany: settings
+      };
+      
+      await sendToBluetoothPrinter(bluetoothData);
+      console.log('Historical receipt printed via Bluetooth');
+      return;
+    } catch (error) {
+      console.error('Bluetooth print failed, falling back to browser print:', error);
+      // Fall through to browser print
+    }
+  }
+  
+  // Fallback to browser print dialog (original code unchanged)
   const currencyCode = settings.currencyCode || 'currency';
-
   const flatInfo = flats.find(f => f.id === invoice.flat_id);
 
   const printWindow = window.open('', '_blank', 'width=350,height=600');
