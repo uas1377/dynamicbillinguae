@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Printer, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
+import { Bluetooth, Loader2, Printer, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { setActiveBluetoothDevice, clearActiveBluetoothDevice } from "@/utils/thermalPrintGenerator";
 
@@ -142,7 +142,7 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
       // Store the active connection with characteristic for direct printing
       setActiveBluetoothDevice(device, server, characteristic);
       
-      // Also store globally for thermal print generator to access
+      // CRITICAL: Store globally for bluetoothPrintService to access
       if (typeof window !== 'undefined') {
         window.bluetoothPrinterCharacteristic = characteristic;
       }
@@ -158,9 +158,6 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
       device.addEventListener('gattserverdisconnected', () => {
         setConnectedDevice(null);
         clearActiveBluetoothDevice();
-        if (typeof window !== 'undefined') {
-          window.bluetoothPrinterCharacteristic = null;
-        }
         localStorage.removeItem('connectedBluetoothPrinter');
         toast.info('Printer disconnected');
       });
@@ -177,9 +174,6 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
   const disconnectDevice = () => {
     setConnectedDevice(null);
     clearActiveBluetoothDevice();
-    if (typeof window !== 'undefined') {
-      window.bluetoothPrinterCharacteristic = null;
-    }
     localStorage.removeItem('connectedBluetoothPrinter');
     setDevices([]);
     toast.success('Printer disconnected');
@@ -187,8 +181,8 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
 
   const testPrint = async () => {
     try {
-      // Generate a simple test receipt
-      const { generateThermalPrint } = await import('@/utils/thermalPrintGenerator');
+      // Import the new Bluetooth print service
+      const { sendToBluetoothPrinter } = await import('@/utils/bluetoothPrintService');
       
       const testData = {
         invoiceNumber: 'TEST-001',
@@ -211,7 +205,7 @@ const BluetoothPrinterDialog = ({ open, onOpenChange }) => {
         }
       };
       
-      await generateThermalPrint(testData);
+      await sendToBluetoothPrinter(testData);
       toast.success('Test print sent!');
     } catch (error) {
       toast.error('Test print failed: ' + error.message);
