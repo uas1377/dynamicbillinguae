@@ -1,5 +1,13 @@
 import { getBusinessSettings } from "./localStorageData";
 
+export const isBluetoothPrinterConnected = () => {
+  // Most reliable simple check: see if we still have an active characteristic
+  return !!window.bluetoothPrinterCharacteristic;
+  // Alternative (if you prefer the original localStorage check):
+  // const savedDevice = localStorage.getItem('connectedBluetoothPrinter');
+  // return !!savedDevice;
+};
+
 const formatCol = (val, len, align = 'left') => {
   const str = String(val || "").substring(0, len);
   return align === 'right' ? str.padStart(len) : str.padEnd(len);
@@ -53,6 +61,10 @@ export const sendToBluetoothPrinter = async (invoiceData) => {
 
   // SEND TO PRINTER
   const char = window.bluetoothPrinterCharacteristic;
+  if (!char) {
+    throw new Error("No active Bluetooth printer characteristic found");
+  }
+  
   const encoder = new TextEncoder();
   await char.writeValue(encoder.encode(r));
   return true;
