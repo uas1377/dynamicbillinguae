@@ -224,11 +224,16 @@ const CustomerManagement = () => {
     
     const summaryData = {
       invoice_number: `MONTHLY-${group.key}`,
+      invoiceNumber: `MONTHLY-${group.key}`,
       created_at: new Date().toISOString(),
       customer_name: `Flat ${flatInfo?.flat_number}`,
+      customerName: `Flat ${flatInfo?.flat_number}`,
       customer_phone: flatInfo?.user_id || '',
+      customerPhone: flatInfo?.user_id || '',
       building_name: buildingInfo?.name || '',
+      buildingName: buildingInfo?.name || '',
       flat_number: flatInfo?.flat_number || '',
+      flatNumber: flatInfo?.flat_number || '',
       items: group.invoices.map(inv => ({
         name: `Invoice ${inv.invoice_number}`,
         sku: new Date(inv.created_at).toLocaleDateString(),
@@ -236,17 +241,25 @@ const CustomerManagement = () => {
         amount: inv.grand_total
       })),
       sub_total: group.paid + group.unpaid,
+      subTotal: group.paid + group.unpaid,
       tax_rate: 0,
+      taxRate: 0,
       tax_amount: 0,
+      taxAmount: 0,
       grand_total: group.paid + group.unpaid,
+      grandTotal: group.paid + group.unpaid,
       amount_received: group.paid,
+      amountReceived: group.paid,
       change_amount: 0,
+      changeAmount: 0,
       status: group.unpaid > 0 ? 'unpaid' : 'paid',
       cashier_name: getCurrentCashier(),
+      cashierName: getCurrentCashier(),
       notes: `Monthly Summary for ${group.label}
 Total Invoices: ${group.invoices.length}
 Paid: ${formatCurrency(group.paid, businessSettings.currencyCode || 'currency')}
-Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}`
+Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currency')}`,
+      yourCompany: businessSettings
     };
 
     try {
@@ -407,7 +420,26 @@ Unpaid: ${formatCurrency(group.unpaid, businessSettings.currencyCode || 'currenc
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-2 no-print">
-              <Button size="sm" className="h-8" onClick={() => printHistoricalReceipt(selectedInvoice)}><Printer className="mr-1 h-3 w-3"/> Print</Button>
+              <Button size="sm" className="h-8" onClick={() => {
+                // Prepare clean data for the printer
+                const cleanInvoiceData = {
+                  ...selectedInvoice,
+                  invoiceNumber: selectedInvoice.invoice_number,
+                  customerName: selectedInvoice.customer_name,
+                  customerPhone: selectedInvoice.customer_phone,
+                  cashierName: selectedInvoice.cashier_name,
+                  subTotal: selectedInvoice.sub_total,
+                  taxRate: selectedInvoice.tax_rate,
+                  taxAmount: selectedInvoice.tax_amount,
+                  grandTotal: selectedInvoice.grand_total,
+                  amountReceived: selectedInvoice.amount_received,
+                  changeAmount: selectedInvoice.change_amount,
+                  items: selectedInvoice.items || [],
+                  status: selectedInvoice.status || 'unpaid',
+                  yourCompany: businessSettings
+                };
+                printHistoricalReceipt(cleanInvoiceData);
+              }}><Printer className="mr-1 h-3 w-3"/> Print</Button>
               <Button size="sm" className="h-8" onClick={() => handleSaveDetailImage()}><ImageIcon className="mr-1 h-3 w-3"/> Save</Button>
               <QRCodeButton amount={selectedInvoice.grand_total} size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90" />
             </div>
