@@ -1,33 +1,51 @@
 import html2canvas from 'html2canvas';
 import { isBluetoothPrinterConnected, sendToBluetoothPrinter } from './bluetoothPrintService';
 
+// Bluetooth connection state management (added for BluetoothPrinterDialog)
+let activeBluetoothDevice = null;
+let activeGattServer = null;
+
+export const setActiveBluetoothDevice = (device, server, characteristic = null) => {
+  activeBluetoothDevice = device;
+  activeGattServer = server;
+  if (characteristic && typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = characteristic;
+  }
+};
+
+export const clearActiveBluetoothDevice = () => {
+  activeBluetoothDevice = null;
+  activeGattServer = null;
+  if (typeof window !== 'undefined') {
+    window.bluetoothPrinterCharacteristic = null;
+  }
+};
+
 export const generateThermalPrint = async (invoiceData, businessName = 'Business Name') => {
-  // Check if Bluetooth printer is connected
-  const isBluetoothActive = typeof window !== 'undefined' && !!window.bluetoothPrinterCharacteristic;
-  
-  if (isBluetoothActive) {
+  // Check if Bluetooth is connected
+  if (isBluetoothPrinterConnected()) {
     try {
-      console.log("Routing to Bluetooth Printer...");
       await sendToBluetoothPrinter(invoiceData);
+      console.log('Printed via Bluetooth');
       return;
     } catch (error) {
-      console.error("Bluetooth print failed, falling back to Browser Print:", error);
-      // Fall through to browser print below
+      console.error('Bluetooth print failed, falling back to browser print:', error);
+      // Fall through to browser print
     }
   }
-  
-  // Fallback: Browser Print Dialog
-  return new Promise((resolve, reject) => {
+
+  // Fallback to browser print
+  return new Promise(async (resolve, reject) => {
     try {
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
       const currencyCode = businessSettings.currencyCode || 'AED';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
-      
+
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       const printDocument = printWindow.document;
-      
+
       printDocument.write(`
         <!DOCTYPE html>
         <html>
@@ -177,38 +195,37 @@ export const generateThermalPrint = async (invoiceData, businessName = 'Business
         </body>
         </html>
       `);
-      
+
       printDocument.close();
-      
+
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
         resolve();
       }, 500);
-      
     } catch (error) {
       reject(error);
     }
   });
 };
 
+// Optional save as image (your original, unchanged)
 export const saveAsImage = async (invoiceData, businessName = 'Business Name') => {
   return new Promise(async (resolve, reject) => {
     try {
-      const printContent = document.createElement('div');
-      printContent.style.position = 'absolute';
-      printContent.style.left = '-9999px';
-      printContent.style.top = '0';
-      printContent.style.backgroundColor = 'white';
-      printContent.style.padding = '10px';
-      document.body.appendChild(printContent);
-      
       const businessSettings = invoiceData.yourCompany || {};
       const actualBusinessName = businessSettings.name || businessName;
       const currencyCode = businessSettings.currencyCode || 'AED';
       const isPaid = invoiceData.status !== 'unpaid';
       const amountPaidDisplay = isPaid ? invoiceData.amountReceived : '0.00 (unpaid)';
-      
+
+      const printContent = document.createElement('div');
+      printContent.style.position = 'absolute';
+      printContent.style.left = '-9999px';
+      printContent.style.top = '0';
+      printContent.style.backgroundColor = 'white';
+      document.body.appendChild(printContent);
+
       printContent.innerHTML = `
         <div style="
           width: 280px;
@@ -310,24 +327,20 @@ export const saveAsImage = async (invoiceData, businessName = 'Business Name') =
           </div>
         </div>
       `;
-      
-      printContent.style.position = 'absolute';
-      printContent.style.left = '-9999px';
-      printContent.style.top = '0';
-      
+
       const canvas = await html2canvas(printContent, {
         scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: 'white'
       });
-      
+
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `invoice_${invoiceData.invoiceNumber}_${new Date().getTime()}.png`;
       link.href = imgData;
       link.click();
-      
+
       document.body.removeChild(printContent);
       resolve();
     } catch (error) {
